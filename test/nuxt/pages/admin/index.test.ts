@@ -2,29 +2,53 @@ import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AdminPage from '@/pages/admin/index.vue'
 import { DOMWrapper, flushPromises } from '@vue/test-utils'
+import { readFileSync } from 'fs'
+import { Blob, File } from 'node:buffer'
+import { resolve } from 'path'
+
+globalThis.Blob = Blob as any
+globalThis.File = File as any
+
+const dataRef = ref<string[] | object[]>([])
+const pendingRef = ref(false)
+const errorRef = ref<Error | null>(null)
+const widthRef = ref(768)
 
 const fetchMock = vi.fn()
 const { toastAddMock } = vi.hoisted(() => {
   return { toastAddMock: vi.fn() }
 })
 
-const dataRef = ref(['Canada', 'United States of America', 'Mexico'])
-const pendingRef = ref(false)
-const errorRef = ref<Error | null>(null)
-
 mockNuxtImport('useToast', () => {
   return () => ({
     add: toastAddMock,
   })
 })
+
+// mockNuxtImport('useFetch', () => {
+//   return () => ({
+//     data: dataRef,
+//     pending: pendingRef,
+//     error: errorRef,
+//   })
+// })
+
 mockNuxtImport('useFetch', () => {
-  return () => ({
-    data: dataRef,
-    pending: pendingRef,
-    error: errorRef,
-  })
+  return (url: string) => {
+    if (url === '/api/countries') {
+      dataRef.value = ['Canada', 'United States of America', 'Mexico']
+    }
+    else if (url === '/api/tags') {
+      dataRef.value = [{ id: 1, name: 'Park' }, { id: 2, name: 'Shrine' }]
+    }
+
+    return {
+      data: dataRef,
+      pending: pendingRef,
+      error: errorRef,
+    }
+  }
 })
-const widthRef = ref(768)
 
 vi.mock(import('@vueuse/core'), async (importOriginal) => {
   const actual = await importOriginal()
@@ -32,7 +56,7 @@ vi.mock(import('@vueuse/core'), async (importOriginal) => {
     ...actual,
     useWindowSize: () => ({
       width: widthRef,
-      height: ref(800)
+      height: ref(800),
     }),
   }
 })
@@ -72,6 +96,17 @@ describe('Admin index page', () => {
       const bodyWrapper = new DOMWrapper(document.body)
       const fieldNames = ['name', 'address', 'city', 'website', 'phone']
 
+      const imageBuffer = readFileSync(resolve(__dirname, '../../../fixtures/oc1.jpg'))
+      const image = new File([imageBuffer], 'oc1.jpg', { type: 'image/jpeg' })
+
+      const fileInput = bodyWrapper.find('input[name="images"]')
+      Object.defineProperty(fileInput.element, 'files', {
+        value: [image],
+        configurable: true,
+      })
+      await fileInput.trigger('change')
+      expect(bodyWrapper.find('[data-slot="files"]').exists()).toBe(true)
+
       for (const field of fieldNames) {
         const input = bodyWrapper.find(`input[name="${field}"]`)
         await input.setValue('Test')
@@ -94,6 +129,8 @@ describe('Admin index page', () => {
       await bodyWrapper.find('button[data-testid="close-slideover-btn"]').trigger('click')
       await wrapper.find('button[data-testid="open-slideover-btn"]').trigger('click')
 
+      expect(bodyWrapper.find('[data-slot="files"]').exists()).toBe(false)
+
       fieldNames.forEach((field) => {
         const emptyInput = bodyWrapper.find(`input[name="${field}"]`).element as HTMLInputElement
         expect(emptyInput.value).toBe('')
@@ -113,7 +150,7 @@ describe('Admin index page', () => {
       await wrapper.find('button[data-testid="open-slideover-btn"]').trigger('click')
 
       const bodyWrapper = new DOMWrapper(document.body)
-      const fieldNames = ['image', 'name', 'address', 'country', 'city', 'website', 'phone']
+      const fieldNames = ['images', 'name', 'address', 'country', 'city', 'website', 'phone']
 
       fieldNames.forEach((field) => {
         expect(bodyWrapper.find(`input[name="${field}"]`).exists()).toBe(true)
@@ -127,7 +164,7 @@ describe('Admin index page', () => {
       await wrapper.find('button[data-testid="open-slideover-btn"]').trigger('click')
 
       const bodyWrapper = new DOMWrapper(document.body)
-      const fieldNames = ['image', 'name', 'address', 'country', 'city', 'website', 'phone']
+      const fieldNames = ['images', 'name', 'address', 'country', 'city', 'website', 'phone']
 
       fieldNames.forEach((field) => {
         const input = bodyWrapper.find(`input[name="${field}"]`).element as HTMLInputElement
