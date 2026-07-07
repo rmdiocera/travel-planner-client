@@ -24,10 +24,12 @@
           <div class="grid gap-2">
             <UFormField
               label="Upload image"
-              name="image"
+              name="images"
             >
               <UFileUpload
+                v-model="form.images"
                 :interactive="true"
+                multiple
                 accept="image/*"
                 size="md"
                 variant="area"
@@ -77,11 +79,11 @@
                       v-model="form.country"
                       :items="country_names"
                       searchable
-                      :loading="pending"
-                      :disabled="!!error"
+                      :loading="countriesPending"
+                      :disabled="!!countriesError"
                       :variant="form.country === '' ? 'subtle' : 'outline'"
                       class="w-full"
-                      :placeholder="!!error ? 'Failed to get countries' : 'Search country'"
+                      :placeholder="!!countriesError ? 'Failed to get countries' : 'Search country'"
                       data-testid="select-country-select"
                     />
                   </UFormField>
@@ -142,9 +144,10 @@
           </UFormField>
           <UFormField label="Tags">
             <USelectMenu
-              v-model="tags"
-              :items="availableTags"
-              :variant="tags.length === 0 ? 'subtle' : 'outline'"
+              v-model="selected_tags"
+              label-key="name"
+              :items="tag_values"
+              :variant="selected_tags.length === 0 ? 'subtle' : 'outline'"
               multiple
               placeholder="Select tags..."
               class="w-full"
@@ -152,16 +155,19 @@
               <div
                 class="flex flex-wrap gap-1.5 min-h-9 w-full rounded-md border border-neutral-200 dark:border-neutral-800 px-2 py-1.5 cursor-pointer"
               >
-                <div v-if="tags.length > 0">
+                <div
+                  v-if="selected_tags.length > 0"
+                  class="flex flex-wrap gap-2"
+                >
                   <span
-                    v-for="tag in tags"
+                    v-for="tag in selected_tags"
                     :key="tag"
                     class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-primary-50 text-primary-700 dark:bg-primary-950 dark:text-primary-300 ring-1 ring-primary-200 dark:ring-primary-800"
                   >
-                    {{ tag }}
+                    {{ tag.name }}
                     <button
                       type="button"
-                      class="hover:text-primary-900 dark:hover:text-primary-100"
+                      class="hover:text-primary-900 dark:hover:text-primary-100 flex items-center"
                       @click.stop="removeTag(tag)"
                     >
                       <UIcon
@@ -213,14 +219,21 @@ import type { ToastProps } from '@nuxt/ui'
 import { useWindowSize } from '@vueuse/core'
 import { ref } from 'vue'
 
+interface Tag {
+  id: number
+  name: string
+}
+
 const { width } = useWindowSize()
 const side = computed(() => width.value < 768 ? 'bottom' : 'right')
 
-const { data: countries, pending, error } = useFetch('/api/countries')
+const { data: countries, pending: countriesPending, error: countriesError } = useFetch('/api/countries')
 const country_names = ref(countries.value)
 
-const availableTags = ref(['Tag 1', 'Tag 2', 'Tag 3', 'Tag 1000000000', 'Tag 2000000000', 'Tag 3000000000'])
-const tags = ref([])
+const { data: tags } = await useFetch<{ data: { id: number, name: string }[] }>('/api/tags')
+const tag_values = computed(() => tags.value?.data)
+const selected_tags = ref<Tag[]>([])
+const selected_tag_ids = computed(() => selected_tags.value.map(tag => tag.id))
 
 const formRef = useTemplateRef('form')
 const open = ref(false)
@@ -245,6 +258,8 @@ const form = ref({
   website: '',
   phone: '',
   details: '',
+  images: [],
+  tags: selected_tags,
 })
 
 watch(open, (isOpen) => {
@@ -257,12 +272,16 @@ watch(open, (isOpen) => {
       website: '',
       phone: '',
       details: '',
+      images: [],
+      tags: [],
     }
+
+    selected_tags.value = []
   }
 })
 
-function removeTag(tag: string) {
-  tags.value = tags.value.filter(t => t !== tag)
+function removeTag(tag: Tag) {
+  selected_tags.value = selected_tags.value.filter(t => t !== tag)
 }
 
 function triggerSubmit() {
@@ -272,10 +291,31 @@ function triggerSubmit() {
 async function handleSubmit() {
   isLoading.value = true
 
+  const payload = new FormData()
+  payload.append('name', form.value.name)
+  payload.append('address', form.value.address)
+  payload.append('city', form.value.city)
+  payload.append('country', form.value.country)
+  payload.append('website', form.value.website)
+  payload.append('phone', form.value.phone)
+  payload.append('details', form.value.details)
+
+  if (form.value.tags) {
+    selected_tag_ids.value.forEach((id) => {
+      payload.append('tags[]', String(id))
+    })
+  }
+
+  if (form.value.images) {
+    form.value.images.forEach((image, index) => {
+      payload.append('images[]', image)
+    })
+  }
+
   try {
     await $fetch('/api/places', {
       method: 'POST',
-      body: form.value,
+      body: payload,
     })
 
     open.value = false

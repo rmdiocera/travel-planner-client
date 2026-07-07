@@ -1,5 +1,7 @@
 import { fetch, setup, $fetch } from '@nuxt/test-utils/e2e'
+import { readFileSync } from 'fs'
 import { FetchError } from 'ofetch'
+import { resolve } from 'path'
 import { describe, it, expect, beforeAll } from 'vitest'
 
 type Place = {
@@ -11,6 +13,8 @@ type Place = {
   website: string
   phone: string
   details: string
+  tags: Tag[]
+  images: Image[]
 }
 
 type PlacesResponse = {
@@ -19,6 +23,16 @@ type PlacesResponse = {
 
 type PlaceResponse = {
   data: Place
+}
+
+type Tag = {
+  id: number
+  name: string
+}
+
+type Image = {
+  id: number
+  path: string
 }
 
 let place1Id: string
@@ -84,12 +98,30 @@ describe('Places API', async () => {
   ]
 
   beforeAll(async () => {
-    try {
-      const place1 = await $fetch<PlaceResponse>('/api/places', { method: 'POST', body: places[0] })
-      const place2 = await $fetch<PlaceResponse>('/api/places', { method: 'POST', body: places[1] })
+    const formData = new FormData()
+    const formData2 = new FormData()
 
-      place1Id = place1.data.id
-      place2Id = place2.data.id
+    formData.append('name', places[0].name)
+    formData.append('address', places[0].address)
+    formData.append('city', places[0].city)
+    formData.append('country', places[0].country)
+    formData.append('details', places[0].details)
+
+    formData2.append('name', places[1].name)
+    formData2.append('address', places[1].address)
+    formData2.append('city', places[1].city)
+    formData2.append('country', places[1].country)
+    formData2.append('details', places[1].details)
+
+    try {
+      const place1 = await fetch('/api/places', { method: 'POST', body: formData })
+      const place2 = await fetch('/api/places', { method: 'POST', body: formData2 })
+
+      const place1Body = await place1.json() as PlaceResponse
+      const place2Body = await place2.json() as PlaceResponse
+
+      place1Id = place1Body.data.id
+      place2Id = place2Body.data.id
     }
     catch (error) {
       if (error instanceof FetchError) {
@@ -100,9 +132,39 @@ describe('Places API', async () => {
   })
 
   it('creates a place', async () => {
+    const formData = new FormData()
+
+    const imageBuffers = [
+      readFileSync(resolve(__dirname, '../fixtures/oc1.jpg')),
+      readFileSync(resolve(__dirname, '../fixtures/oc2.png')),
+      readFileSync(resolve(__dirname, '../fixtures/oc3.webp')),
+    ]
+
+    const images = [
+      new File([imageBuffers[0]], 'oc1.jpg', { type: 'image/jpeg' }),
+      new File([imageBuffers[1]], 'oc2.png', { type: 'image/png' }),
+      new File([imageBuffers[2]], 'oc3.webp', { type: 'image/webp' }),
+    ]
+
+    formData.append('name', places[2].name)
+    formData.append('address', places[2].address)
+    formData.append('city', places[2].city)
+    formData.append('country', places[2].country)
+    formData.append('website', places[2].website)
+    formData.append('phone', places[2].phone)
+    formData.append('details', places[2].details)
+
+    places[2].tags.forEach((tag, index) => {
+      formData.append(`tags[${index}]`, tag.toString())
+    })
+
+    images.forEach((image, index) => {
+      formData.append(`images[${index}]`, image)
+    })
+
     const created = await fetch('/api/places', {
       method: 'POST',
-      body: JSON.stringify(places[2]),
+      body: formData,
     })
     expect(created.status).toBe(201)
     expect(created).toBeDefined()
@@ -115,6 +177,13 @@ describe('Places API', async () => {
     expect(body.data.website).toBe(places[2].website)
     expect(body.data.phone).toBe(places[2].phone)
     expect(body.data.details).toBe(places[2].details)
+
+    expect(body.data.tags).toHaveLength(3)
+    expect(body.data.tags[0].id).toBe(places[2].tags[0])
+    expect(body.data.tags[1].id).toBe(places[2].tags[1])
+    expect(body.data.tags[2].id).toBe(places[2].tags[2])
+
+    expect(body.data.images).toHaveLength(3)
 
     const place = await fetch(`/api/places/${body.data.id}`)
     expect(place.status).toBe(200)
