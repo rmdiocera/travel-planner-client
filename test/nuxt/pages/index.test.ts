@@ -38,8 +38,6 @@ describe('Index page', () => {
   afterEach(() => {
     wrapper?.unmount()
     vi.useRealTimers()
-    // pendingRef.value = false
-    // errorRef.value = null
   })
 
   describe('Open/close behavior', () => {

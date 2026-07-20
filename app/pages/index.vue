@@ -96,7 +96,7 @@ import Slideover from '@/components/ui/Slideover.vue'
 import { useWindowSize } from '@vueuse/core'
 
 definePageMeta({
-  layout: false, // disable default layout so we can set it dynamically
+  layout: false,
 })
 
 const layout = 'home'
