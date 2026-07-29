@@ -1,67 +1,53 @@
-import { mountSuspended } from '@nuxt/test-utils/runtime'
-import { afterEach, describe, expect, it } from 'vitest'
-import Modal from '@/components/ui/Modal.vue'
-import { DOMWrapper } from '@vue/test-utils'
+import { describe, expect, it } from 'vitest'
+import { mountModal } from '../../utils/mountModal'
 
 describe('Modal.vue', () => {
-  let wrapper: Awaited<ReturnType<typeof mountSuspended>>
-
-  afterEach(() => {
-    wrapper?.unmount()
-  })
-
-  it('is visible if open prop is true', async () => {
-    wrapper = await mountSuspended(Modal, {
-      props: { open: true },
+  describe('Open/close behavior', () => {
+    it('is visible if open prop is true', async () => {
+      const { bodyWrapper } = await mountModal({ props: { open: true } })
+      expect(bodyWrapper.find('[data-state="open"]').exists()).toBe(true)
     })
 
-    const bodyWrapper = new DOMWrapper(document.body)
-    expect(bodyWrapper.find('[data-state="open"]').exists()).toBe(true)
+    it('is hidden if open prop is false', async () => {
+      const { bodyWrapper } = await mountModal({ props: { open: false } })
+      expect(bodyWrapper.find('[data-state="open"]').exists()).toBe(false)
+    })
   })
 
-  it('is hidden if open prop is false', async () => {
-    wrapper = await mountSuspended(Modal, {
-      props: { open: false },
+  describe('Slots rendering', () => {
+    it('renders content passed to the form slot', async () => {
+      const { bodyWrapper } = await mountModal({
+        props: { open: true },
+        slots: {
+          form: '<div data-testid="test-form">Form content</div>',
+        },
+      })
+
+      expect(bodyWrapper.find('[data-testid="test-form"]').exists()).toBe(true)
+      expect(bodyWrapper.find('[data-testid="test-form"]').text()).toBe('Form content')
     })
 
-    const bodyWrapper = new DOMWrapper(document.body)
-    expect(bodyWrapper.find('[data-state="open"]').exists()).toBe(false)
+    it('renders content passed to the action slot', async () => {
+      const { bodyWrapper } = await mountModal({
+        props: { open: true },
+        slots: {
+          action: '<button data-testid="submit-btn">Submit</button>',
+        },
+      })
+
+      expect(bodyWrapper.find('[data-testid="submit-btn"]').exists()).toBe(true)
+    })
   })
 
-  it('renders content passed to the form slot', async () => {
-    wrapper = await mountSuspended(Modal, {
-      props: { open: true },
-      slots: {
-        form: '<div data-testid="test-form">Form content</div>',
-      },
+  describe('Events', () => {
+    it('emits update:open when closed', async () => {
+      const { wrapper, bodyWrapper } = await mountModal({
+        props: { open: true },
+      })
+      await bodyWrapper.find('[aria-label="Close"]').trigger('click')
+
+      expect(wrapper.emitted('update:open')).toBeTruthy()
+      expect(wrapper.emitted('update:open')?.[0]).toEqual([false])
     })
-
-    const bodyWrapper = new DOMWrapper(document.body)
-    expect(bodyWrapper.find('[data-testid="test-form"]').exists()).toBe(true)
-    expect(bodyWrapper.find('[data-testid="test-form"]').text()).toBe('Form content')
-  })
-
-  it('renders content passed to the action slot', async () => {
-    wrapper = await mountSuspended(Modal, {
-      props: { open: true },
-      slots: {
-        action: '<button data-testid="submit-btn">Submit</button>',
-      },
-    })
-
-    const bodyWrapper = new DOMWrapper(document.body)
-    expect(bodyWrapper.find('[data-testid="submit-btn"]').exists()).toBe(true)
-  })
-
-  it('emits update:open when closed', async () => {
-    wrapper = await mountSuspended(Modal, {
-      props: { open: true },
-    })
-
-    const bodyWrapper = new DOMWrapper(document.body)
-    await bodyWrapper.find('[aria-label="Close"]').trigger('click')
-
-    expect(wrapper.emitted('update:open')).toBeTruthy()
-    expect(wrapper.emitted('update:open')?.[0]).toEqual([false])
   })
 })

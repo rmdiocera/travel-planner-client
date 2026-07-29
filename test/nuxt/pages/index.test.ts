@@ -1,9 +1,15 @@
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DOMWrapper, flushPromises } from '@vue/test-utils'
+import { mountIndexPage } from '../../utils/mountIndexPage'
 import IndexPage from '@/pages/index.vue'
 
 const widthRef = ref(768)
+const SELECTORS = {
+  openBtn: 'button[data-testid="open-modal-btn"]',
+  closeBtn: 'button[data-testid="close-modal-btn"]',
+  createBtn: 'button[data-testid="create-itinerary-btn"]',
+}
 
 const fetchMock = vi.fn()
 const { toastAddMock } = vi.hoisted(() => {
@@ -28,42 +34,31 @@ vi.mock(import('@vueuse/core'), async (importOriginal) => {
 })
 
 describe('Index page', () => {
-  let wrapper: Awaited<ReturnType<typeof mountSuspended>>
-
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-07-01'))
+    widthRef.value = 768
   })
 
   afterEach(() => {
-    wrapper?.unmount()
     vi.useRealTimers()
   })
 
   describe('Open/close behavior', () => {
     it('shows the modal if the "Open" button is clicked', async () => {
-      wrapper = await mountSuspended(IndexPage)
-      await wrapper.find('button[data-testid="open-modal-btn"]').trigger('click')
-
-      const bodyWrapper = new DOMWrapper(document.body)
+      const { bodyWrapper } = await mountIndexPage()
       expect(bodyWrapper.find('[data-state="open"]').exists()).toBe(true)
     })
 
     it('hides the modal if "Close (X)" is clicked', async () => {
-      wrapper = await mountSuspended(IndexPage)
-      await wrapper.find('button[data-testid="open-modal-btn"]').trigger('click')
-
-      const bodyWrapper = new DOMWrapper(document.body)
+      const { bodyWrapper } = await mountIndexPage()
       await bodyWrapper.find('button[data-testid="close-modal-btn"]').trigger('click')
-
       expect(bodyWrapper.find('[data-state="open"]').exists()).toBe(false)
     })
 
     it('resets form fields if the modal is closed', async () => {
-      wrapper = await mountSuspended(IndexPage)
-      await wrapper.find('button[data-testid="open-modal-btn"]').trigger('click')
+      const { wrapper, bodyWrapper } = await mountIndexPage()
 
-      const bodyWrapper = new DOMWrapper(document.body)
       const nameInput = bodyWrapper.find('input[name="name"]')
       await nameInput.setValue('Test')
       expect((nameInput.element as HTMLInputElement).value).toBe('Test')
@@ -81,7 +76,7 @@ describe('Index page', () => {
       expect(endDateCalendar.find('span:not([aria-hidden])').text()).toBe('Jul 28, 2026')
 
       await bodyWrapper.find('button[data-testid="close-modal-btn"]').trigger('click')
-      await wrapper.find('button[data-testid="open-modal-btn"]').trigger('click')
+      await wrapper.find(SELECTORS.openBtn).trigger('click')
       await nextTick()
 
       const emptyNameInput = bodyWrapper.find('input[name="name"]')
@@ -96,20 +91,15 @@ describe('Index page', () => {
 
   describe('Field rendering', () => {
     it('shows the fields that can be filled out in the modal for creating an itinerary', async () => {
-      wrapper = await mountSuspended(IndexPage)
-      await wrapper.find('button[data-testid="open-modal-btn"]').trigger('click')
+      const { bodyWrapper } = await mountIndexPage()
 
-      const bodyWrapper = new DOMWrapper(document.body)
       expect(bodyWrapper.find('input[name="name"]').exists()).toBe(true)
       expect(bodyWrapper.find('button[data-testid="select-start-date-btn"]').exists()).toBe(true)
       expect(bodyWrapper.find('button[data-testid="select-end-date-btn"]').exists()).toBe(true)
     })
 
     it('renders name field empty and date fields in their default state', async () => {
-      wrapper = await mountSuspended(IndexPage)
-      await wrapper.find('button[data-testid="open-modal-btn"]').trigger('click')
-
-      const bodyWrapper = new DOMWrapper(document.body)
+      const { bodyWrapper } = await mountIndexPage()
 
       const nameInput = bodyWrapper.find('input[name="name"]')
       expect((nameInput.element as HTMLInputElement).value).toBe('')
@@ -122,10 +112,8 @@ describe('Index page', () => {
     })
 
     it('shows that the dates before the time today are disabled in the calendar', async () => {
-      wrapper = await mountSuspended(IndexPage)
-      await wrapper.find('button[data-testid="open-modal-btn"]').trigger('click')
+      const { bodyWrapper } = await mountIndexPage()
 
-      const bodyWrapper = new DOMWrapper(document.body)
       const startDateCalendar = bodyWrapper.find('button[data-testid="select-start-date-btn"]')
       await startDateCalendar.trigger('click')
       const dateTodayDiv = bodyWrapper.find('div[data-value="2026-07-01"]')
@@ -141,26 +129,23 @@ describe('Index page', () => {
     })
 
     afterEach(() => {
+      fetchMock.mockReset()
       vi.unstubAllGlobals()
     })
 
     it('closes the modal on successful POST', async () => {
-      wrapper = await mountSuspended(IndexPage)
-      await wrapper.find('button[data-testid="open-modal-btn"]').trigger('click')
+      fetchMock.mockResolvedValue({})
 
-      const bodyWrapper = new DOMWrapper(document.body)
+      const { bodyWrapper } = await mountIndexPage()
       await bodyWrapper.find('button[data-testid="create-itinerary-btn"]').trigger('click')
       await flushPromises()
 
-      expect(fetchMock.mockResolvedValue({})).toHaveBeenCalled()
+      expect(fetchMock).toHaveBeenCalled()
       expect(bodyWrapper.find('[data-state="open"]').exists()).toBe(false)
     })
 
     it('shows a success toast with the correct title and icon on successful POST', async () => {
-      wrapper = await mountSuspended(IndexPage)
-      await wrapper.find('button[data-testid="open-modal-btn"]').trigger('click')
-
-      const bodyWrapper = new DOMWrapper(document.body)
+      const { bodyWrapper } = await mountIndexPage()
       await bodyWrapper.find('button[data-testid="create-itinerary-btn"]').trigger('click')
       await flushPromises()
 
@@ -179,10 +164,8 @@ describe('Index page', () => {
         })
       })
 
-      wrapper = await mountSuspended(IndexPage)
-      await wrapper.find('button[data-testid="open-modal-btn"]').trigger('click')
+      const { bodyWrapper } = await mountIndexPage()
 
-      const bodyWrapper = new DOMWrapper(document.body)
       const submitBtn = bodyWrapper.find('button[data-testid="create-itinerary-btn"]')
       await submitBtn.trigger('click')
       await flushPromises()
@@ -218,10 +201,8 @@ describe('Index page', () => {
         statusCode: 422,
       })
 
-      wrapper = await mountSuspended(IndexPage)
-      await wrapper.find('button[data-testid="open-modal-btn"]').trigger('click')
+      const { bodyWrapper } = await mountIndexPage()
 
-      const bodyWrapper = new DOMWrapper(document.body)
       const startDateCalendar = bodyWrapper.find('button[data-testid="select-start-date-btn"]')
       await startDateCalendar.trigger('click')
       const matchingStartDateDiv = bodyWrapper.find('div[data-value="2026-07-28"]')
@@ -245,10 +226,7 @@ describe('Index page', () => {
     it('shows an error toast with the correct title, icon, description and color on failed POST', async () => {
       fetchMock.mockRejectedValue(new Error('Network Error'))
 
-      wrapper = await mountSuspended(IndexPage)
-      await wrapper.find('button[data-testid="open-modal-btn"]').trigger('click')
-
-      const bodyWrapper = new DOMWrapper(document.body)
+      const { bodyWrapper } = await mountIndexPage()
       await bodyWrapper.find('button[data-testid="create-itinerary-btn"]').trigger('click')
       await flushPromises()
 
@@ -263,7 +241,7 @@ describe('Index page', () => {
 
   describe('Integration with Modal and Slideover', async () => {
     it('shows a modal when page is accessed on medium and large devices', async () => {
-      wrapper = await mountSuspended(IndexPage)
+      const wrapper = await mountSuspended(IndexPage)
       expect(wrapper.find('button[data-testid="open-modal-btn"]').exists()).toBe(true)
 
       await wrapper.find('button[data-testid="open-modal-btn"]').trigger('click')
@@ -274,7 +252,7 @@ describe('Index page', () => {
     it('shows a slideover when page is accessed on small devices', async () => {
       widthRef.value = 767
 
-      wrapper = await mountSuspended(IndexPage)
+      const wrapper = await mountSuspended(IndexPage)
       expect(wrapper.find('button[data-testid="open-slideover-btn"]').exists()).toBe(true)
 
       await wrapper.find('button[data-testid="open-slideover-btn"]').trigger('click')
