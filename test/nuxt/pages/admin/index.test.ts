@@ -1,10 +1,10 @@
-import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime'
+import { mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import AdminPage from '@/pages/admin/index.vue'
-import { DOMWrapper, flushPromises } from '@vue/test-utils'
+import { flushPromises } from '@vue/test-utils'
 import { readFileSync } from 'fs'
 import { Blob, File } from 'node:buffer'
 import { resolve } from 'path'
+import { mountAdminPage } from '../../../utils/mountAdminPage'
 
 globalThis.Blob = Blob as any
 globalThis.File = File as any
@@ -13,6 +13,14 @@ const dataRef = ref<string[] | object[]>([])
 const pendingRef = ref(false)
 const errorRef = ref<Error | null>(null)
 const widthRef = ref(768)
+const SELECTORS = {
+  openBtn: 'button[data-testid="open-slideover-btn"]',
+  closeBtn: 'button[data-testid="close-slideover-btn"]',
+  submitBtn: 'button[data-testid="submit-place-btn"]',
+  countrySelect: 'button[data-testid="select-country-select"]',
+}
+const TEXT_FIELDS = ['name', 'address', 'city', 'website', 'phone']
+const ALL_FIELDS = ['images', ...TEXT_FIELDS, 'country']
 
 const fetchMock = vi.fn()
 const { toastAddMock } = vi.hoisted(() => {
@@ -24,14 +32,6 @@ mockNuxtImport('useToast', () => {
     add: toastAddMock,
   })
 })
-
-// mockNuxtImport('useFetch', () => {
-//   return () => ({
-//     data: dataRef,
-//     pending: pendingRef,
-//     error: errorRef,
-//   })
-// })
 
 mockNuxtImport('useFetch', () => {
   return (url: string) => {
@@ -62,39 +62,26 @@ vi.mock(import('@vueuse/core'), async (importOriginal) => {
 })
 
 describe('Admin index page', () => {
-  let wrapper: Awaited<ReturnType<typeof mountSuspended>>
-
   afterEach(() => {
-    wrapper?.unmount()
     pendingRef.value = false
     errorRef.value = null
+    widthRef.value = 768
   })
 
   describe('Open/close behavior', () => {
     it('shows the slideover if the "Open" button is clicked', async () => {
-      wrapper = await mountSuspended(AdminPage)
-      await wrapper.find('button[data-testid="open-slideover-btn"]').trigger('click')
-
-      const bodyWrapper = new DOMWrapper(document.body)
+      const { bodyWrapper } = await mountAdminPage()
       expect(bodyWrapper.find('[data-state="open"]').exists()).toBe(true)
     })
 
     it('hides the slideover if "Close (X)" is clicked', async () => {
-      wrapper = await mountSuspended(AdminPage)
-      await wrapper.find('button[data-testid="open-slideover-btn"]').trigger('click')
-
-      const bodyWrapper = new DOMWrapper(document.body)
-      await bodyWrapper.find('button[data-testid="close-slideover-btn"]').trigger('click')
-
+      const { bodyWrapper } = await mountAdminPage()
+      await bodyWrapper.find(SELECTORS.closeBtn).trigger('click')
       expect(bodyWrapper.find('[data-state="open"]').exists()).toBe(false)
     })
 
     it('resets form fields if the slideover is closed', async () => {
-      wrapper = await mountSuspended(AdminPage)
-      await wrapper.find('button[data-testid="open-slideover-btn"]').trigger('click')
-
-      const bodyWrapper = new DOMWrapper(document.body)
-      const fieldNames = ['name', 'address', 'city', 'website', 'phone']
+      const { wrapper, bodyWrapper } = await mountAdminPage()
 
       const imageBuffer = readFileSync(resolve(__dirname, '../../../fixtures/oc1.jpg'))
       const image = new File([imageBuffer], 'oc1.jpg', { type: 'image/jpeg' })
@@ -107,13 +94,13 @@ describe('Admin index page', () => {
       await fileInput.trigger('change')
       expect(bodyWrapper.find('[data-slot="files"]').exists()).toBe(true)
 
-      for (const field of fieldNames) {
+      for (const field of TEXT_FIELDS) {
         const input = bodyWrapper.find(`input[name="${field}"]`)
         await input.setValue('Test')
         expect((input.element as HTMLInputElement).value).toBe('Test')
       }
 
-      const selectBtn = bodyWrapper.find(`button[data-testid="select-country-select"]`)
+      const selectBtn = bodyWrapper.find(SELECTORS.countrySelect)
       await selectBtn.trigger('click')
       const matchingDiv = bodyWrapper.findAll('div[role="option"]').find(div =>
         div.find('span').text() === 'Canada',
@@ -126,12 +113,12 @@ describe('Admin index page', () => {
       await details.setValue('Test')
       expect((details.element as HTMLTextAreaElement).value).toBe('Test')
 
-      await bodyWrapper.find('button[data-testid="close-slideover-btn"]').trigger('click')
-      await wrapper.find('button[data-testid="open-slideover-btn"]').trigger('click')
+      await bodyWrapper.find(SELECTORS.closeBtn).trigger('click')
+      await wrapper.find(SELECTORS.openBtn).trigger('click')
 
       expect(bodyWrapper.find('[data-slot="files"]').exists()).toBe(false)
 
-      fieldNames.forEach((field) => {
+      TEXT_FIELDS.forEach((field) => {
         const emptyInput = bodyWrapper.find(`input[name="${field}"]`).element as HTMLInputElement
         expect(emptyInput.value).toBe('')
       })
@@ -146,13 +133,9 @@ describe('Admin index page', () => {
 
   describe('Field rendering', () => {
     it('shows the fields that can be filled out in the slideover for creating a place', async () => {
-      wrapper = await mountSuspended(AdminPage)
-      await wrapper.find('button[data-testid="open-slideover-btn"]').trigger('click')
+      const { bodyWrapper } = await mountAdminPage()
 
-      const bodyWrapper = new DOMWrapper(document.body)
-      const fieldNames = ['images', 'name', 'address', 'country', 'city', 'website', 'phone']
-
-      fieldNames.forEach((field) => {
+      ALL_FIELDS.forEach((field) => {
         expect(bodyWrapper.find(`input[name="${field}"]`).exists()).toBe(true)
       })
 
@@ -160,13 +143,9 @@ describe('Admin index page', () => {
     })
 
     it('renders fields empty on initial open', async () => {
-      wrapper = await mountSuspended(AdminPage)
-      await wrapper.find('button[data-testid="open-slideover-btn"]').trigger('click')
+      const { bodyWrapper } = await mountAdminPage()
 
-      const bodyWrapper = new DOMWrapper(document.body)
-      const fieldNames = ['images', 'name', 'address', 'country', 'city', 'website', 'phone']
-
-      fieldNames.forEach((field) => {
+      ALL_FIELDS.forEach((field) => {
         const input = bodyWrapper.find(`input[name="${field}"]`).element as HTMLInputElement
         expect(input.value).toBe('')
       })
@@ -186,23 +165,19 @@ describe('Admin index page', () => {
     })
 
     it('closes the slideover on successful POST', async () => {
-      wrapper = await mountSuspended(AdminPage)
-      await wrapper.find('button[data-testid="open-slideover-btn"]').trigger('click')
+      fetchMock.mockResolvedValue({})
 
-      const bodyWrapper = new DOMWrapper(document.body)
-      await bodyWrapper.find('button[data-testid="submit-place-btn"]').trigger('click')
+      const { bodyWrapper } = await mountAdminPage()
+      await bodyWrapper.find(SELECTORS.submitBtn).trigger('click')
       await flushPromises()
 
-      expect(fetchMock.mockResolvedValue({})).toHaveBeenCalled()
+      expect(fetchMock).toHaveBeenCalled()
       expect(bodyWrapper.find('[data-state="open"]').exists()).toBe(false)
     })
 
     it('shows a success toast with the correct title and icon on successful POST', async () => {
-      wrapper = await mountSuspended(AdminPage)
-      await wrapper.find('button[data-testid="open-slideover-btn"]').trigger('click')
-
-      const bodyWrapper = new DOMWrapper(document.body)
-      await bodyWrapper.find('button[data-testid="submit-place-btn"]').trigger('click')
+      const { bodyWrapper } = await mountAdminPage()
+      await bodyWrapper.find(SELECTORS.submitBtn).trigger('click')
       await flushPromises()
 
       expect(toastAddMock).toHaveBeenCalledWith({
@@ -220,11 +195,8 @@ describe('Admin index page', () => {
         })
       })
 
-      wrapper = await mountSuspended(AdminPage)
-      await wrapper.find('button[data-testid="open-slideover-btn"]').trigger('click')
-
-      const bodyWrapper = new DOMWrapper(document.body)
-      const submitBtn = bodyWrapper.find('button[data-testid="submit-place-btn"]')
+      const { bodyWrapper } = await mountAdminPage()
+      const submitBtn = bodyWrapper.find(SELECTORS.submitBtn)
       await submitBtn.trigger('click')
       await flushPromises()
 
@@ -243,6 +215,7 @@ describe('Admin index page', () => {
     })
 
     afterEach(() => {
+      fetchMock.mockReset()
       vi.unstubAllGlobals()
     })
 
@@ -262,11 +235,8 @@ describe('Admin index page', () => {
         statusCode: 422,
       })
 
-      wrapper = await mountSuspended(AdminPage)
-      await wrapper.find('button[data-testid="open-slideover-btn"]').trigger('click')
-
-      const bodyWrapper = new DOMWrapper(document.body)
-      await bodyWrapper.find('button[data-testid="submit-place-btn"]').trigger('click')
+      const { bodyWrapper } = await mountAdminPage()
+      await bodyWrapper.find(SELECTORS.submitBtn).trigger('click')
 
       await flushPromises()
 
@@ -282,11 +252,8 @@ describe('Admin index page', () => {
     it('shows an error toast with the correct title, icon, description and color on failed POST', async () => {
       fetchMock.mockRejectedValue(new Error('Network Error'))
 
-      wrapper = await mountSuspended(AdminPage)
-      await wrapper.find('button[data-testid="open-slideover-btn"]').trigger('click')
-
-      const bodyWrapper = new DOMWrapper(document.body)
-      await bodyWrapper.find('button[data-testid="submit-place-btn"]').trigger('click')
+      const { bodyWrapper } = await mountAdminPage()
+      await bodyWrapper.find(SELECTORS.submitBtn).trigger('click')
       await flushPromises()
 
       expect(toastAddMock).toHaveBeenCalledWith({
@@ -299,29 +266,18 @@ describe('Admin index page', () => {
   })
 
   describe('Country select states', () => {
-    afterEach(() => {
-      pendingRef.value = false
-      errorRef.value = null
-    })
-
     it('is disabled if an error occured', async () => {
       errorRef.value = new Error('Failed to fetch countries')
 
-      wrapper = await mountSuspended(AdminPage)
-      await wrapper.find('button[data-testid="open-slideover-btn"]').trigger('click')
-
-      const bodyWrapper = new DOMWrapper(document.body)
-      const selectBtn = bodyWrapper.find(`button[data-testid="select-country-select"]`)
+      const { bodyWrapper } = await mountAdminPage()
+      const selectBtn = bodyWrapper.find(SELECTORS.countrySelect)
       expect(selectBtn.attributes()).toHaveProperty('disabled')
     })
 
     it('shows a loading state if it\'s still pending', async () => {
       pendingRef.value = true
 
-      wrapper = await mountSuspended(AdminPage)
-      await wrapper.find('button[data-testid="open-slideover-btn"]').trigger('click')
-
-      const bodyWrapper = new DOMWrapper(document.body)
+      const { bodyWrapper } = await mountAdminPage()
       const loaderIcon = bodyWrapper.find('[data-slot="leadingIcon"][class*="loader-circle"]')
       expect(loaderIcon.exists()).toBe(true)
     })
@@ -329,10 +285,7 @@ describe('Admin index page', () => {
     it('shows the correct error placeholder', async () => {
       errorRef.value = new Error('Failed to fetch countries')
 
-      wrapper = await mountSuspended(AdminPage)
-      await wrapper.find('button[data-testid="open-slideover-btn"]').trigger('click')
-
-      const bodyWrapper = new DOMWrapper(document.body)
+      const { bodyWrapper } = await mountAdminPage()
       const errorPlaceholder = bodyWrapper.find(`button[data-testid="select-country-select"] > span[data-slot="placeholder"]`)
       expect(errorPlaceholder.text()).toBe('Failed to get countries')
     })
@@ -340,10 +293,7 @@ describe('Admin index page', () => {
 
   describe('Integration with Slideover', async () => {
     it('Side value changes based on window width', async () => {
-      wrapper = await mountSuspended(AdminPage)
-      await wrapper.find('button[data-testid="open-slideover-btn"]').trigger('click')
-
-      const bodyWrapper = new DOMWrapper(document.body)
+      const { bodyWrapper } = await mountAdminPage()
       expect(bodyWrapper.find('[data-side="right"]').exists()).toBe(true)
 
       widthRef.value = 767
