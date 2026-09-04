@@ -6,6 +6,7 @@ export default defineEventHandler(async (event) => {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${config.apiKey}`,
+      'Accept': 'application/json',
     },
     body,
   })

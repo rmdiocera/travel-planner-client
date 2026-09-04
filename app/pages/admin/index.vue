@@ -307,7 +307,7 @@ async function handleSubmit() {
   }
 
   if (form.value.images) {
-    form.value.images.forEach((image, index) => {
+    form.value.images.forEach((image) => {
       payload.append('images[]', image)
     })
   }
