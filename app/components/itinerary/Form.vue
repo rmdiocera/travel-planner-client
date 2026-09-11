@@ -1,9 +1,21 @@
 <script setup lang="ts">
 import { getLocalTimeZone, DateFormatter, today } from '@internationalized/date'
 
+type Itinerary = {
+  id: string
+  name: string
+  start_date: Date
+  end_date: Date
+}
+
+type ItineraryResponse = {
+  data: Itinerary
+}
+
 const emit = defineEmits<{
   loading: [value: boolean]
   isModalOpen: [value: boolean]
+  itineraryCreated: [value: ItineraryResponse]
 }>()
 
 defineExpose({
@@ -65,12 +77,13 @@ async function handleSubmit() {
   emit('loading', true)
 
   try {
-    await $fetch('/api/itineraries', {
+    const new_itinerary = await $fetch<ItineraryResponse>('/api/itineraries', {
       method: 'POST',
       body: form.value,
     })
 
     emit('isModalOpen', false)
+    emit('itineraryCreated', new_itinerary)
     startDate.value = ''
     endDate.value = ''
     showToast('Itinerary created successfully', 'i-lucide-circle-check')
