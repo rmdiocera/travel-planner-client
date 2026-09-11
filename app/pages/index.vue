@@ -11,6 +11,7 @@
             ref="itineraryForm"
             @loading="isLoading = $event"
             @is-modal-open="modalOpen = $event"
+            @itinerary-created="itineraryCreated = $event"
           />
         </template>
         <template #action>
@@ -43,6 +44,7 @@
             ref="itineraryForm"
             @loading="isLoading = $event"
             @is-modal-open="slideoverOpen = $event"
+            @itinerary-created="itineraryCreated = $event"
           />
         </template>
         <template #action>
@@ -76,7 +78,7 @@
         <div>
           <UButton
             v-if="!isMobile"
-            label="Create Itinerary"
+            label="Create"
             color="primary"
             variant="solid"
             icon="i-lucide-plus"
@@ -85,7 +87,7 @@
           />
           <UButton
             v-else
-            label="Create Itinerary"
+            label="Create"
             color="primary"
             variant="solid"
             icon="i-lucide-plus"
@@ -138,7 +140,7 @@
         <template #footer>
           <UButton
             v-if="!isMobile"
-            label="Create Itinerary"
+            label="Create"
             color="primary"
             variant="solid"
             icon="i-lucide-plus"
@@ -148,7 +150,7 @@
 
           <UButton
             v-else
-            label="Create Itinerary"
+            label="Create"
             color="primary"
             variant="solid"
             icon="i-lucide-plus"
@@ -187,6 +189,10 @@ type ItinerariesGroupedResponse = {
   }
 }
 
+type ItineraryResponse = {
+  data: Itinerary
+}
+
 const layout = 'home'
 
 const modalOpen = ref(false)
@@ -200,6 +206,26 @@ const { data: itineraries } = useFetch<ItinerariesGroupedResponse>('/api/itinera
   params: {
     grouped: true,
   },
+})
+
+const itineraryCreated = ref<ItineraryResponse>({} as ItineraryResponse)
+watch(itineraryCreated, (value) => {
+  if (itineraries.value?.data) {
+    itineraries.value = {
+      'data': {
+        'upcoming': itineraries.value.data.upcoming ? [...itineraries.value.data.upcoming] : [],
+        'ongoing': itineraries.value.data.ongoing ? [...itineraries.value.data.ongoing] : [],
+        'past': itineraries.value.data.past ? [...itineraries.value.data.past] : [],
+      },
+    }
+
+    if (new Date(value.data.start_date) > new Date()) {
+      itineraries.value.data.upcoming.push(value.data)
+    }
+    else {
+      itineraries.value.data.ongoing.push(value.data)
+    }
+  }
 })
 
 const hasItineraries = computed(() => {
