@@ -3,37 +3,7 @@ import { readFileSync } from 'fs'
 import { FetchError } from 'ofetch'
 import { resolve } from 'path'
 import { describe, it, expect, beforeAll } from 'vitest'
-
-type Place = {
-  id: string
-  name: string
-  address: string
-  country: string
-  city: string
-  website: string
-  phone: string
-  details: string
-  tags: Tag[]
-  images: Image[]
-}
-
-type PlacesResponse = {
-  data: Place[]
-}
-
-type PlaceResponse = {
-  data: Place
-}
-
-type Tag = {
-  id: number
-  name: string
-}
-
-type Image = {
-  id: number
-  path: string
-}
+import type { PlaceResponse, PlacesResponse } from '../../app/types/place'
 
 let place1Id: string
 let place2Id: string
