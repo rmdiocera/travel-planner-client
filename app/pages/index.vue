@@ -169,29 +169,11 @@ import Modal from '@/components/ui/Modal.vue'
 import Slideover from '@/components/ui/Slideover.vue'
 import { useWindowSize } from '@vueuse/core'
 import Grid from '~/components/itinerary/Grid.vue'
+import type { ItineraryResponse, ItinerariesGroupedResponse } from '~/types/itinerary'
 
 definePageMeta({
   layout: false,
 })
-
-type Itinerary = {
-  id: string
-  name: string
-  start_date: Date
-  end_date: Date
-}
-
-type ItinerariesGroupedResponse = {
-  data: {
-    past: Itinerary[]
-    ongoing: Itinerary[]
-    upcoming: Itinerary[]
-  }
-}
-
-type ItineraryResponse = {
-  data: Itinerary
-}
 
 const layout = 'home'
 

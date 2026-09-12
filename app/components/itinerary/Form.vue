@@ -1,16 +1,6 @@
 <script setup lang="ts">
 import { getLocalTimeZone, DateFormatter, today } from '@internationalized/date'
-
-type Itinerary = {
-  id: string
-  name: string
-  start_date: Date
-  end_date: Date
-}
-
-type ItineraryResponse = {
-  data: Itinerary
-}
+import type { ItineraryResponse } from '~/types/itinerary'
 
 const emit = defineEmits<{
   loading: [value: boolean]

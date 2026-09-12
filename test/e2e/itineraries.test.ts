@@ -3,29 +3,7 @@ import { getLocalTimeZone, today } from '@internationalized/date'
 import { fetch, setup, $fetch } from '@nuxt/test-utils/e2e'
 import { FetchError } from 'ofetch'
 import { beforeAll, describe, expect, it } from 'vitest'
-
-type Itinerary = {
-  id: string
-  name: string
-  start_date: Date
-  end_date: Date
-}
-
-type ItineraryResponse = {
-  data: Itinerary
-}
-
-type ItinerariesResponse = {
-  data: Itinerary[]
-}
-
-type ItinerariesGroupedResponse = {
-  data: {
-    past: Itinerary[]
-    ongoing: Itinerary[]
-    upcoming: Itinerary[]
-  }
-}
+import type { ItineraryResponse, ItinerariesResponse, ItinerariesGroupedResponse } from '../../app/types/itinerary'
 
 let itinerary1Id: string
 let itinerary2Id: string

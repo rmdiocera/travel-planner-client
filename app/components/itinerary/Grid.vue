@@ -1,10 +1,5 @@
 <script setup lang="ts">
-type Itinerary = {
-  id: string
-  name: string
-  start_date: Date
-  end_date: Date
-}
+import type { Itinerary } from '~/types/itinerary'
 
 defineProps<{
   itineraries: Itinerary[]
