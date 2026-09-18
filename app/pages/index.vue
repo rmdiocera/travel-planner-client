@@ -4,14 +4,16 @@
       <Modal
         v-if="!isMobile"
         v-model:open="modalOpen"
-        title="Create Itinerary"
+        :title="!isEditing ? 'Create Itinerary' : 'Edit Itinerary'"
       >
         <template #form>
           <ItineraryForm
             ref="itineraryForm"
+            :selected-itinerary="itineraryDisplayed"
             @loading="isLoading = $event"
             @is-modal-open="modalOpen = $event"
             @itinerary-created="itineraryCreated = $event"
+            @itinerary-updated="itineraryUpdated = $event"
           />
         </template>
         <template #action>
@@ -21,10 +23,10 @@
               color="neutral"
               variant="outline"
               :disabled="isLoading"
-              @click="() => { modalOpen = false }"
+              @click="() => { modalOpen = false; isEditing = false }"
             />
             <UButton
-              label="Create"
+              :label="!isEditing ? 'Create' : 'Save Changes'"
               color="primary"
               :loading="isLoading"
               data-testid="create-itinerary-btn"
@@ -37,14 +39,16 @@
         v-else
         v-model:open="slideoverOpen"
         side="bottom"
-        title="Create Itinerary"
+        :title="!isEditing ? 'Create Itinerary' : 'Edit Itinerary'"
       >
         <template #form>
           <ItineraryForm
             ref="itineraryForm"
+            :selected-itinerary="itineraryDisplayed"
             @loading="isLoading = $event"
             @is-modal-open="slideoverOpen = $event"
             @itinerary-created="itineraryCreated = $event"
+            @itinerary-updated="itineraryUpdated = $event"
           />
         </template>
         <template #action>
@@ -55,12 +59,12 @@
               label="Cancel"
               color="neutral"
               variant="outline"
-              @click="() => { slideoverOpen = false }"
+              @click="() => { slideoverOpen = false; isEditing = false }"
             />
             <UButton
               block
               class="basis-2/3"
-              label="Submit"
+              :label="!isEditing ? 'Create' : 'Save Changes'"
               color="primary"
               :loading="isLoading"
               data-testid="submit-place-btn"
@@ -83,7 +87,7 @@
             variant="solid"
             icon="i-lucide-plus"
             data-testid="open-modal-btn"
-            @click="() => { modalOpen = true }"
+            @click="() => { modalOpen = true; isEditing = false }"
           />
           <UButton
             v-else
@@ -92,7 +96,7 @@
             variant="solid"
             icon="i-lucide-plus"
             data-testid="open-slideover-btn"
-            @click="() => { slideoverOpen = true }"
+            @click="() => { slideoverOpen = true; isEditing = false }"
           />
         </div>
       </div>
@@ -107,7 +111,13 @@
           <h2 class="itinerary-heading">
             Ongoing
           </h2>
-          <Grid :itineraries="itineraries.data.ongoing" />
+          <Grid
+            :itineraries="itineraries.data.ongoing"
+            @is-editing="isEditing = $event"
+            @is-modal-open="modalOpen = $event"
+            @is-slideover-open="slideoverOpen = $event"
+            @selected-itinerary="itineraryDisplayed = $event; itineraryBucket='ongoing'"
+          />
         </div>
         <div
           v-if="itineraries?.data.upcoming.length"
@@ -116,7 +126,13 @@
           <h2 class="itinerary-heading">
             Upcoming
           </h2>
-          <Grid :itineraries="itineraries.data.upcoming" />
+          <Grid
+            :itineraries="itineraries.data.upcoming"
+            @is-editing="isEditing = $event"
+            @is-modal-open="modalOpen = $event"
+            @is-slideover-open="slideoverOpen = $event"
+            @selected-itinerary="itineraryDisplayed = $event; itineraryBucket='upcoming'"
+          />
         </div>
         <div
           v-if="itineraries?.data.past.length"
@@ -145,7 +161,7 @@
             variant="solid"
             icon="i-lucide-plus"
             data-testid="open-modal-btn"
-            @click="() => { modalOpen = true }"
+            @click="() => { modalOpen = true; isEditing = false }"
           />
 
           <UButton
@@ -155,7 +171,7 @@
             variant="solid"
             icon="i-lucide-plus"
             data-testid="open-slideover-btn"
-            @click="() => { slideoverOpen = true }"
+            @click="() => { slideoverOpen = true; isEditing = false }"
           />
         </template>
       </UEmpty>
@@ -169,7 +185,7 @@ import Modal from '@/components/ui/Modal.vue'
 import Slideover from '@/components/ui/Slideover.vue'
 import { useWindowSize } from '@vueuse/core'
 import Grid from '~/components/itinerary/Grid.vue'
-import type { ItineraryResponse, ItinerariesGroupedResponse } from '~/types/itinerary'
+import type { Itinerary, ItineraryResponse, ItinerariesGroupedResponse } from '~/types/itinerary'
 
 definePageMeta({
   layout: false,
@@ -180,9 +196,12 @@ const layout = 'home'
 const modalOpen = ref(false)
 const slideoverOpen = ref(false)
 const isLoading = ref(false)
+const isEditing = ref(false)
 
 const { width } = useWindowSize()
 const isMobile = computed(() => width.value < 768)
+
+const itineraryBucket = ref<'ongoing' | 'upcoming'>()
 
 const { data: itineraries } = useFetch<ItinerariesGroupedResponse>('/api/itineraries', {
   params: {
@@ -193,6 +212,53 @@ const { data: itineraries } = useFetch<ItinerariesGroupedResponse>('/api/itinera
 const itineraryCreated = ref<ItineraryResponse>({} as ItineraryResponse)
 watch(itineraryCreated, (value) => {
   if (itineraries.value?.data) {
+    reorderItineraries(value)
+  }
+})
+
+const itineraryDisplayed = ref<Itinerary | undefined>(undefined)
+
+const hasItineraries = computed(() => {
+  const data = itineraries.value?.data
+  return !!(data?.ongoing.length || data?.past.length || data?.upcoming.length)
+})
+
+watch(modalOpen, (isOpen) => {
+  if (!isOpen) {
+    itineraryDisplayed.value = undefined
+  }
+})
+
+const itineraryUpdated = ref<ItineraryResponse>({} as ItineraryResponse)
+watch(itineraryUpdated, (value) => {
+  const isDeleted = ref(false)
+
+  if (itineraries.value?.data) {
+    if (itineraryBucket.value) {
+      const old_itinerary = itineraries.value.data[itineraryBucket.value].find(itinerary => itinerary.id === value.data.id)
+      if (old_itinerary && (old_itinerary?.name !== value.data.name
+        || old_itinerary?.start_date !== value.data.start_date
+        || old_itinerary?.end_date !== value.data.end_date)) {
+        const index = itineraries.value.data[itineraryBucket.value].indexOf(old_itinerary)
+        itineraries.value.data[itineraryBucket.value].splice(index, 1)
+        isDeleted.value = true
+      }
+    }
+
+    if (isDeleted.value) {
+      reorderItineraries(value)
+    }
+  }
+})
+
+const itineraryFormRef = useTemplateRef('itineraryForm')
+
+function triggerSubmit() {
+  (itineraryFormRef.value as any)?.triggerSubmit()
+}
+
+function reorderItineraries(itinerary: ItineraryResponse) {
+  if (itineraries.value?.data) {
     itineraries.value = {
       'data': {
         'upcoming': itineraries.value.data.upcoming ? [...itineraries.value.data.upcoming] : [],
@@ -201,23 +267,12 @@ watch(itineraryCreated, (value) => {
       },
     }
 
-    if (new Date(value.data.start_date) > new Date()) {
-      itineraries.value.data.upcoming.push(value.data)
+    if (new Date(itinerary.data.start_date) > new Date()) {
+      itineraries.value.data.upcoming.push(itinerary.data)
     }
     else {
-      itineraries.value.data.ongoing.push(value.data)
+      itineraries.value.data.ongoing.push(itinerary.data)
     }
   }
-})
-
-const hasItineraries = computed(() => {
-  const data = itineraries.value?.data
-  return !!(data?.ongoing.length || data?.past.length || data?.upcoming.length)
-})
-
-const itineraryFormRef = useTemplateRef('itineraryForm')
-
-function triggerSubmit() {
-  (itineraryFormRef.value as any)?.triggerSubmit()
 }
 </script>

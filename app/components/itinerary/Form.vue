@@ -1,34 +1,48 @@
 <script setup lang="ts">
+import type { CalendarDate } from '@internationalized/date'
 import { getLocalTimeZone, DateFormatter, today } from '@internationalized/date'
-import type { ItineraryResponse } from '~/types/itinerary'
+import type { Itinerary, ItineraryResponse } from '~/types/itinerary'
+
+const props = defineProps<{
+  selectedItinerary?: Itinerary
+}>()
+const isEditing = computed(() => !!props.selectedItinerary)
 
 const emit = defineEmits<{
   loading: [value: boolean]
   isModalOpen: [value: boolean]
   itineraryCreated: [value: ItineraryResponse]
+  itineraryUpdated: [value: ItineraryResponse]
 }>()
 
 defineExpose({
   triggerSubmit,
 })
 
-const startDate = shallowRef()
-const endDate = shallowRef()
+const startDate = shallowRef<CalendarDate | undefined>(
+  props.selectedItinerary?.start_date
+    ? toCalendarDate(new Date(props.selectedItinerary.start_date))
+    : undefined,
+)
+const endDate = shallowRef<CalendarDate | undefined>(
+  props.selectedItinerary?.end_date
+    ? toCalendarDate(new Date(props.selectedItinerary.end_date))
+    : undefined,
+)
 const dateToday = today(getLocalTimeZone())
 
 const df = new DateFormatter('en-US', {
   dateStyle: 'medium',
 })
 
-const modalOpen = ref(false)
 const startDateCalOpen = ref(false)
 const endDateCalOpen = ref(false)
 
 const formRef = useTemplateRef('form')
 const form = ref({
-  name: '',
-  start_date: '',
-  end_date: '',
+  name: props.selectedItinerary?.name ?? '',
+  start_date: props.selectedItinerary?.start_date ?? '',
+  end_date: props.selectedItinerary?.end_date ?? '',
 })
 
 const toast = useToast()
@@ -42,20 +56,16 @@ function showToast(title: string, icon: string, description?: string, color?: To
 }
 
 watch(startDate, (value) => {
-  form.value.start_date = value.toString()
-  startDateCalOpen.value = false
+  if (value) {
+    form.value.start_date = value.toString()
+    startDateCalOpen.value = false
+  }
 })
 
 watch(endDate, (value) => {
-  form.value.end_date = value.toString()
-  endDateCalOpen.value = false
-})
-
-watch(modalOpen, (isOpen) => {
-  if (!isOpen) {
-    form.value.name = ''
-    startDate.value = ''
-    endDate.value = ''
+  if (value) {
+    form.value.end_date = value.toString()
+    endDateCalOpen.value = false
   }
 })
 
@@ -67,16 +77,29 @@ async function handleSubmit() {
   emit('loading', true)
 
   try {
-    const new_itinerary = await $fetch<ItineraryResponse>('/api/itineraries', {
-      method: 'POST',
-      body: form.value,
-    })
+    if (!isEditing.value) {
+      const new_itinerary = await $fetch<ItineraryResponse>('/api/itineraries', {
+        method: 'POST',
+        body: form.value,
+      })
 
-    emit('isModalOpen', false)
-    emit('itineraryCreated', new_itinerary)
-    startDate.value = ''
-    endDate.value = ''
-    showToast('Itinerary created successfully', 'i-lucide-circle-check')
+      emit('isModalOpen', false)
+      emit('itineraryCreated', new_itinerary)
+      showToast('Itinerary created successfully', 'i-lucide-circle-check')
+    }
+    else {
+      const updated_itinerary = await $fetch<ItineraryResponse>(`/api/itineraries/${props.selectedItinerary?.id}`, {
+        method: 'PATCH',
+        body: form.value,
+      })
+
+      emit('isModalOpen', false)
+      emit('itineraryUpdated', updated_itinerary)
+      showToast('Itinerary updated successfully', 'i-lucide-circle-check')
+    }
+
+    startDate.value = undefined
+    endDate.value = undefined
   }
   catch (error: any) {
     const apiErrors = error?.data?.data?.errors
