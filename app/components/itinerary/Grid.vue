@@ -1,9 +1,47 @@
 <script setup lang="ts">
+import type { DropdownMenuItem } from '@nuxt/ui'
+import { useWindowSize } from '@vueuse/core'
 import type { Itinerary } from '~/types/itinerary'
+
+const emit = defineEmits<{
+  isModalOpen: [value: boolean]
+  isSlideoverOpen: [value: boolean]
+  isEditing: [value: boolean]
+  selectedItinerary: [value: Itinerary]
+}>()
 
 defineProps<{
   itineraries: Itinerary[]
 }>()
+
+const { width } = useWindowSize()
+const isMobile = computed(() => width.value < 768)
+
+const items = (itinerary: Itinerary) => [
+  {
+    label: 'Edit',
+    icon: 'i-lucide-pencil',
+    onSelect: () => {
+      if (!isMobile.value) {
+        emit('isModalOpen', true)
+      }
+      else {
+        emit('isSlideoverOpen', true)
+      }
+
+      emit('isEditing', true)
+      emit('selectedItinerary', itinerary)
+    },
+  },
+  {
+    label: 'Delete',
+    color: 'error',
+    icon: 'i-lucide-trash',
+    onSelect: () => {
+      console.log('Deleting itinerary:', itinerary.id)
+    },
+  },
+] satisfies DropdownMenuItem[]
 </script>
 
 <template>
@@ -19,7 +57,14 @@ defineProps<{
           class="w-full rounded-md"
         />
       </div>
-      <UDropdownMenu class="absolute top-2 right-2">
+      <UDropdownMenu
+        :items="items(itinerary)"
+        :content="{
+          align: 'start',
+          sideOffset: 4,
+        }"
+        class="absolute top-2 right-2"
+      >
         <UButton
           icon="i-lucide-ellipsis"
           color="primary"
