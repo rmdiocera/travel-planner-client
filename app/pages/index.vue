@@ -339,7 +339,7 @@ function addNewItinerary(itinerary: ItineraryResponse) {
   reorderItineraries()
 
   if (itineraries.value?.data) {
-    if (new Date(itinerary.data.start_date) > new Date()) {
+    if (toCalendarDate(new Date(itinerary.data.start_date)) > toCalendarDate(new Date())) {
       itineraries.value.data.upcoming.push(itinerary.data)
     }
     else {
