@@ -6,6 +6,7 @@ import type { Itinerary } from '~/types/itinerary'
 const emit = defineEmits<{
   isModalOpen: [value: boolean]
   isSlideoverOpen: [value: boolean]
+  isConfirmModalOpen: [value: boolean]
   isEditing: [value: boolean]
   selectedItinerary: [value: Itinerary]
 }>()
@@ -38,7 +39,8 @@ const items = (itinerary: Itinerary) => [
     color: 'error',
     icon: 'i-lucide-trash',
     onSelect: () => {
-      console.log('Deleting itinerary:', itinerary.id)
+      emit('isConfirmModalOpen', true)
+      emit('selectedItinerary', itinerary)
     },
   },
 ] satisfies DropdownMenuItem[]
