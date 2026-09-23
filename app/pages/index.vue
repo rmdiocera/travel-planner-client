@@ -271,7 +271,6 @@ watch(modalOpen, (isOpen) => {
 })
 
 watch(confirmModalOpen, (isOpen) => {
-  // console.log(isOpen)
   if (!isOpen) {
     itineraryDisplayed.value = undefined
   }
@@ -321,9 +320,8 @@ async function handleDelete(deletedItinerary: Itinerary | undefined) {
         const index = itineraries.value.data[itineraryBucket.value]
           .map(itinerary => itinerary.id)
           .indexOf(deletedItinerary.id)
-        itineraries.value.data[itineraryBucket.value].splice(index, 1)
-        // console.log(itineraries.value)
 
+        itineraries.value.data[itineraryBucket.value].splice(index, 1)
         reorderItineraries()
       }
     }
