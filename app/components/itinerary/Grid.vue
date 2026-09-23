@@ -33,6 +33,7 @@ const items = (itinerary: Itinerary) => [
       emit('isEditing', true)
       emit('selectedItinerary', itinerary)
     },
+    disabled: toCalendarDate(new Date(itinerary.start_date)) < toCalendarDate(new Date())
   },
   {
     label: 'Delete',
