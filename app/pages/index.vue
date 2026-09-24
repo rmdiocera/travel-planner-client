@@ -135,7 +135,7 @@
           />
         </div>
       </div>
-      <div class="flex flex-col gap-4 px-6">
+      <div class="flex flex-col gap-4">
         <div
           v-if="hasItineraries"
           class="flex flex-col gap-4"
