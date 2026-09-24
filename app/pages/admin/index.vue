@@ -11,7 +11,7 @@
         color="neutral"
         variant="subtle"
         data-testid="open-slideover-btn"
-        @click="open = true"
+        @click="() => { open = true }"
       />
     </template>
     <template #form>
@@ -161,7 +161,7 @@
                 >
                   <span
                     v-for="tag in selected_tags"
-                    :key="tag"
+                    :key="tag.id"
                     class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-primary-50 text-primary-700 dark:bg-primary-950 dark:text-primary-300 ring-1 ring-primary-200 dark:ring-primary-800"
                   >
                     {{ tag.name }}
@@ -195,7 +195,7 @@
             label="Cancel"
             color="neutral"
             variant="outline"
-            @click="open = false"
+            @click="() => { open = false }"
           />
         </div>
         <div class="col-span-2">
@@ -215,14 +215,9 @@
 
 <script setup lang="ts">
 import Slideover from '@/components/ui/Slideover.vue'
-import type { ToastProps } from '@nuxt/ui'
 import { useWindowSize } from '@vueuse/core'
 import { ref } from 'vue'
-
-interface Tag {
-  id: number
-  name: string
-}
+import type { Tag } from '~/types/tag'
 
 const { width } = useWindowSize()
 const side = computed(() => width.value < 768 ? 'bottom' : 'right')
@@ -239,16 +234,7 @@ const formRef = useTemplateRef('form')
 const open = ref(false)
 const isLoading = ref(false)
 
-const toast = useToast()
-
-function showToast(title: string, icon: string, description?: string, color?: ToastProps['color']) {
-  toast.add({
-    title,
-    icon,
-    description,
-    color,
-  })
-}
+const { showToast } = useAppToast()
 
 const form = ref({
   name: '',
