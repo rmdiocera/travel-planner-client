@@ -12,7 +12,6 @@ const open = defineModel<boolean>('open')
       'data-testid': 'close-confirm-modal-btn',
     }"
   >
-
     <template #body>
       <slot name="description" />
     </template>

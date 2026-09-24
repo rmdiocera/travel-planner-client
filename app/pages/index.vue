@@ -109,7 +109,7 @@
         </template>
       </ConfirmModal>
     </ClientOnly>
-    <div class="flex flex-col space-y-4 p-6">
+    <div class="flex flex-col gap-4 pt-6 pb-12">
       <div class="flex justify-between items-center">
         <h1 class="text-lg font-medium">
           Your Itineraries
@@ -135,83 +135,85 @@
           />
         </div>
       </div>
-      <div
-        v-if="hasItineraries"
-        class="flex flex-col gap-4"
-      >
+      <div class="flex flex-col gap-4 px-6">
         <div
-          v-if="itineraries?.data.ongoing.length"
-          class="space-y-4"
+          v-if="hasItineraries"
+          class="flex flex-col gap-4"
         >
-          <h2 class="itinerary-heading">
-            Ongoing
-          </h2>
-          <Grid
-            :itineraries="itineraries.data.ongoing"
-            @is-editing="isEditing = $event"
-            @is-modal-open="modalOpen = $event"
-            @is-slideover-open="slideoverOpen = $event"
-            @is-confirm-modal-open="confirmModalOpen = $event"
-            @selected-itinerary="itineraryDisplayed = $event; itineraryBucket='ongoing'"
-          />
+          <div
+            v-if="itineraries?.data.ongoing.length"
+            class="flex flex-col gap-2"
+          >
+            <h2 class="itinerary-heading">
+              Ongoing
+            </h2>
+            <Grid
+              :itineraries="itineraries.data.ongoing"
+              @is-editing="isEditing = $event"
+              @is-modal-open="modalOpen = $event"
+              @is-slideover-open="slideoverOpen = $event"
+              @is-confirm-modal-open="confirmModalOpen = $event"
+              @selected-itinerary="itineraryDisplayed = $event; itineraryBucket='ongoing'"
+            />
+          </div>
+          <div
+            v-if="itineraries?.data.upcoming.length"
+            class="flex flex-col gap-2"
+          >
+            <h2 class="itinerary-heading">
+              Upcoming
+            </h2>
+            <Grid
+              :itineraries="itineraries.data.upcoming"
+              @is-editing="isEditing = $event"
+              @is-modal-open="modalOpen = $event"
+              @is-slideover-open="slideoverOpen = $event"
+              @is-confirm-modal-open="confirmModalOpen = $event"
+              @selected-itinerary="itineraryDisplayed = $event; itineraryBucket='upcoming'"
+            />
+          </div>
+          <div
+            v-if="itineraries?.data.past.length"
+            class="flex flex-col gap-2"
+          >
+            <h2 class="itinerary-heading">
+              Past
+            </h2>
+            <Grid
+              v-if="itineraries"
+              :itineraries="itineraries.data.past"
+            />
+          </div>
         </div>
-        <div
-          v-if="itineraries?.data.upcoming.length"
-          class="space-y-4"
+        <UEmpty
+          v-else
+          icon="i-lucide-map"
+          title="No itineraries yet"
+          description="Start planning your next trip by creating your first itinerary."
         >
-          <h2 class="itinerary-heading">
-            Upcoming
-          </h2>
-          <Grid
-            :itineraries="itineraries.data.upcoming"
-            @is-editing="isEditing = $event"
-            @is-modal-open="modalOpen = $event"
-            @is-slideover-open="slideoverOpen = $event"
-            @is-confirm-modal-open="confirmModalOpen = $event"
-            @selected-itinerary="itineraryDisplayed = $event; itineraryBucket='upcoming'"
-          />
-        </div>
-        <div
-          v-if="itineraries?.data.past.length"
-          class="space-y-4"
-        >
-          <h2 class="itinerary-heading">
-            Past
-          </h2>
-          <Grid
-            v-if="itineraries"
-            :itineraries="itineraries.data.past"
-          />
-        </div>
-      </div>
-      <UEmpty
-        v-else
-        icon="i-lucide-map"
-        title="No itineraries yet"
-        description="Start planning your next trip by creating your first itinerary."
-      >
-        <template #footer>
-          <UButton
-            v-if="!isMobile"
-            label="Create"
-            color="primary"
-            variant="solid"
-            icon="i-lucide-plus"
-            data-testid="open-modal-btn"
-            @click="() => { modalOpen = true; isEditing = false }"
-          />
+          <template #footer>
+            <UButton
+              v-if="!isMobile"
+              label="Create"
+              color="primary"
+              variant="solid"
+              icon="i-lucide-plus"
+              data-testid="open-modal-btn"
+              @click="() => { modalOpen = true; isEditing = false }"
+            />
 
-          <UButton
-            v-else
-            label="Create"
-            color="primary"
-            variant="solid"
-            icon="i-lucide-plus"
-            data-testid="open-slideover-btn"
-            @click="() => { slideoverOpen = true; isEditing = false }"
-          />
-        </template>
-      </UEmpty>
+            <UButton
+              v-else
+              label="Create"
+              color="primary"
+              variant="solid"
+              icon="i-lucide-plus"
+              data-testid="open-slideover-btn"
+              @click="() => { slideoverOpen = true; isEditing = false }"
+            />
+          </template>
+        </UEmpty>
+      </div>
     </div>
   </NuxtLayout>
 </template>
@@ -310,7 +312,7 @@ async function handleDelete(deletedItinerary: Itinerary | undefined) {
   isLoading.value = true
 
   try {
-    await $fetch<void>(`/api/itineraries/${deletedItinerary.id}`, { method: 'DELETE' })
+    await $fetch<unknown>(`/api/itineraries/${deletedItinerary.id}`, { method: 'DELETE' })
 
     confirmModalOpen.value = false
     showToast('Itinerary deleted successfully', 'i-lucide-circle-check')
@@ -326,7 +328,7 @@ async function handleDelete(deletedItinerary: Itinerary | undefined) {
       }
     }
   }
-  catch (error: any) {
+  catch {
     confirmModalOpen.value = false
     showToast('Something went wrong', 'i-lucide-circle-x', 'There was a problem with your request', 'error')
   }

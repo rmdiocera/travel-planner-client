@@ -45,15 +45,7 @@ const form = ref({
   end_date: props.selectedItinerary?.end_date ?? '',
 })
 
-const toast = useToast()
-function showToast(title: string, icon: string, description?: string, color?: ToastProps['color']) {
-  toast.add({
-    title,
-    icon,
-    description,
-    color,
-  })
-}
+const { showToast } = useAppToast()
 
 watch(startDate, (value) => {
   if (value) {

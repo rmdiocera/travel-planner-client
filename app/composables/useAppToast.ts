@@ -1,4 +1,4 @@
-import type { ToastProps } from "@nuxt/ui"
+import type { ToastProps } from '@nuxt/ui'
 
 export function useAppToast() {
   const toast = useToast()
