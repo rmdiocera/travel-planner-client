@@ -31,3 +31,13 @@
     transform: translateY(0);
   }
 }
+
+.dayfarer-brand {
+  font-family: "Fraunces", serif;
+  font-optical-sizing: auto;
+  font-weight: 600;
+  font-style: normal;
+  font-variation-settings:
+    "SOFT" 0,
+    "WONK" 0;
+}
