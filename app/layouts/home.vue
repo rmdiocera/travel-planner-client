@@ -2,7 +2,10 @@
   <div>
     <UHeader>
       <template #title>
-        Travel Planner
+        <div class="dayfarer-brand text-3xl text-primary flex items-center gap-1">
+          <UIcon name="i-lucide-footprints" />
+          <span>Dayfarer</span>
+        </div>
       </template>
 
       <template #right>

@@ -57,7 +57,7 @@ const items = (itinerary: Itinerary) => [
       <div class="aspect-video overflow-hidden">
         <NuxtImg
           src="/oc1.jpg"
-          class="w-full rounded-md"
+          class="w-full h-full object-fit rounded-md"
         />
       </div>
       <UDropdownMenu
@@ -76,7 +76,7 @@ const items = (itinerary: Itinerary) => [
           :ui="{ base: 'rounded-full text-white bg-black/25 hover:bg-black/50 cursor-pointer' }"
         />
       </UDropdownMenu>
-      <div class="flex flex-col p-4">
+      <div class="flex flex-col px-2 py-4">
         <p class="font-semibold">
           {{ itinerary.name }}
         </p>

@@ -16,6 +16,19 @@ const { toastAddMock } = vi.hoisted(() => {
   return { toastAddMock: vi.fn() }
 })
 
+mockNuxtImport('useLazyFetch', () => {
+  return (url: string) => {
+    if (url === '/api/itineraries') {
+      return {
+        data: ref([]),
+        pending: ref(false),
+        error: ref(null),
+        refresh: vi.fn(),
+      }
+    }
+  }
+})
+
 mockNuxtImport('useToast', () => {
   return () => ({
     add: toastAddMock,

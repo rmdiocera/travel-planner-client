@@ -29,6 +29,7 @@
               :label="!isEditing ? 'Create' : 'Save Changes'"
               color="primary"
               :loading="isLoading"
+              :ui="{ base: 'dark:text-white' }"
               data-testid="create-itinerary-btn"
               @click="triggerSubmit"
             />
@@ -67,6 +68,7 @@
               :label="!isEditing ? 'Create' : 'Save Changes'"
               color="primary"
               :loading="isLoading"
+              :ui="{ base: 'dark:text-white' }"
               data-testid="submit-place-btn"
               @click="triggerSubmit"
             />
@@ -122,6 +124,8 @@
             variant="solid"
             icon="i-lucide-plus"
             data-testid="open-modal-btn"
+            :disabled="!!itinerariesError"
+            :ui="{ base: 'disabled:opacity-50 aria-disabled:opacity-50 dark:text-white' }"
             @click="() => { modalOpen = true; isEditing = false }"
           />
           <UButton
@@ -130,89 +134,116 @@
             color="primary"
             variant="solid"
             icon="i-lucide-plus"
+            :disabled="!!itinerariesError"
+            :ui="{ base: 'disabled:opacity-50 aria-disabled:opacity-50 dark:text-white' }"
             data-testid="open-slideover-btn"
             @click="() => { slideoverOpen = true; isEditing = false }"
           />
         </div>
       </div>
       <div class="flex flex-col gap-4">
-        <div
-          v-if="hasItineraries"
-          class="flex flex-col gap-4"
-        >
-          <div
-            v-if="itineraries?.data.ongoing.length"
-            class="flex flex-col gap-2"
+        <template v-if="itinerariesPending">
+          <ItineraryGridSkeleton />
+        </template>
+        <template v-else-if="itinerariesError">
+          <EmptyState
+            icon="i-lucide-triangle-alert"
+            title="An unexpected error has occured."
+            description="Something went wrong while fetching your data. Check your connection and try again."
+            :ui="{ avatar: '[&>[data-slot=icon]]:text-error bg-error/10 rounded-xl' }"
           >
-            <h2 class="itinerary-heading">
-              Ongoing
-            </h2>
-            <Grid
-              :itineraries="itineraries.data.ongoing"
-              @is-editing="isEditing = $event"
-              @is-modal-open="modalOpen = $event"
-              @is-slideover-open="slideoverOpen = $event"
-              @is-confirm-modal-open="confirmModalOpen = $event"
-              @selected-itinerary="itineraryDisplayed = $event; itineraryBucket='ongoing'"
-            />
-          </div>
+            <template #action>
+              <UButton
+                label="Try again"
+                color="neutral"
+                variant="outline"
+                icon="i-lucide-refresh-cw"
+                :ui="{ base: 'dark:text-white' }"
+                @click="refresh()"
+              />
+            </template>
+          </EmptyState>
+        </template>
+        <template v-else>
           <div
-            v-if="itineraries?.data.upcoming.length"
-            class="flex flex-col gap-2"
+            v-if="hasItineraries"
+            class="flex flex-col gap-4"
           >
-            <h2 class="itinerary-heading">
-              Upcoming
-            </h2>
-            <Grid
-              :itineraries="itineraries.data.upcoming"
-              @is-editing="isEditing = $event"
-              @is-modal-open="modalOpen = $event"
-              @is-slideover-open="slideoverOpen = $event"
-              @is-confirm-modal-open="confirmModalOpen = $event"
-              @selected-itinerary="itineraryDisplayed = $event; itineraryBucket='upcoming'"
-            />
+            <div
+              v-if="itineraries?.data.ongoing.length"
+              class="flex flex-col gap-2"
+            >
+              <h2 class="itinerary-heading">
+                Ongoing
+              </h2>
+              <Grid
+                :itineraries="itineraries.data.ongoing"
+                @is-editing="isEditing = $event"
+                @is-modal-open="modalOpen = $event"
+                @is-slideover-open="slideoverOpen = $event"
+                @is-confirm-modal-open="confirmModalOpen = $event"
+                @selected-itinerary="itineraryDisplayed = $event; itineraryBucket='ongoing'"
+              />
+            </div>
+            <div
+              v-if="itineraries?.data.upcoming.length"
+              class="flex flex-col gap-2"
+            >
+              <h2 class="itinerary-heading">
+                Upcoming
+              </h2>
+              <Grid
+                :itineraries="itineraries.data.upcoming"
+                @is-editing="isEditing = $event"
+                @is-modal-open="modalOpen = $event"
+                @is-slideover-open="slideoverOpen = $event"
+                @is-confirm-modal-open="confirmModalOpen = $event"
+                @selected-itinerary="itineraryDisplayed = $event; itineraryBucket='upcoming'"
+              />
+            </div>
+            <div
+              v-if="itineraries?.data.past.length"
+              class="flex flex-col gap-2"
+            >
+              <h2 class="itinerary-heading">
+                Past
+              </h2>
+              <Grid
+                v-if="itineraries"
+                :itineraries="itineraries.data.past"
+              />
+            </div>
           </div>
-          <div
-            v-if="itineraries?.data.past.length"
-            class="flex flex-col gap-2"
+          <EmptyState
+            v-else
+            icon="i-lucide-map"
+            title="No itineraries yet"
+            description="Start planning your next trip by creating your first itinerary."
           >
-            <h2 class="itinerary-heading">
-              Past
-            </h2>
-            <Grid
-              v-if="itineraries"
-              :itineraries="itineraries.data.past"
-            />
-          </div>
-        </div>
-        <UEmpty
-          v-else
-          icon="i-lucide-map"
-          title="No itineraries yet"
-          description="Start planning your next trip by creating your first itinerary."
-        >
-          <template #footer>
-            <UButton
-              v-if="!isMobile"
-              label="Create"
-              color="primary"
-              variant="solid"
-              icon="i-lucide-plus"
-              data-testid="open-modal-btn"
-              @click="() => { modalOpen = true; isEditing = false }"
-            />
-
-            <UButton
-              v-else
-              label="Create"
-              color="primary"
-              variant="solid"
-              icon="i-lucide-plus"
-              data-testid="open-slideover-btn"
-              @click="() => { slideoverOpen = true; isEditing = false }"
-            />
-          </template>
-        </UEmpty>
+            <template #action>
+              <UButton
+                v-if="!isMobile"
+                label="Create"
+                color="primary"
+                variant="solid"
+                icon="i-lucide-plus"
+                data-testid="open-modal-btn"
+                :ui="{ base: 'dark:text-white' }"
+                @click="() => { modalOpen = true; isEditing = false }"
+              />
+              <UButton
+                v-else
+                label="Create"
+                color="primary"
+                variant="solid"
+                icon="i-lucide-plus"
+                data-testid="open-slideover-btn"
+                :ui="{ base: 'dark:text-white' }"
+                @click="() => { slideoverOpen = true; isEditing = false }"
+              />
+            </template>
+          </EmptyState>
+        </template>
       </div>
     </div>
   </NuxtLayout>
@@ -224,7 +255,9 @@ import Modal from '@/components/ui/Modal.vue'
 import Slideover from '@/components/ui/Slideover.vue'
 import { useWindowSize } from '@vueuse/core'
 import Grid from '~/components/itinerary/Grid.vue'
+import ItineraryGridSkeleton from '~/components/itinerary/GridSkeleton.vue'
 import ConfirmModal from '~/components/ui/ConfirmModal.vue'
+import EmptyState from '~/components/ui/EmptyState.vue'
 import type { Itinerary, ItineraryResponse, ItinerariesGroupedResponse } from '~/types/itinerary'
 
 definePageMeta({
@@ -246,7 +279,7 @@ const { showToast } = useAppToast()
 
 const itineraryBucket = ref<'ongoing' | 'upcoming'>()
 
-const { data: itineraries } = useFetch<ItinerariesGroupedResponse>('/api/itineraries', {
+const { data: itineraries, pending: itinerariesPending, error: itinerariesError, refresh } = useLazyFetch<ItinerariesGroupedResponse>('/api/itineraries', {
   params: {
     grouped: true,
   },
