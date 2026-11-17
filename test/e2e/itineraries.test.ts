@@ -1,8 +1,8 @@
 import { faker } from '@faker-js/faker'
 import { getLocalTimeZone, today } from '@internationalized/date'
-import { fetch, setup, $fetch } from '@nuxt/test-utils/e2e'
 import { FetchError } from 'ofetch'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
+import { createApiSession } from '../utils/apiSession'
 import type { ItineraryResponse, ItinerariesResponse, ItinerariesGroupedResponse } from '../../app/types/itinerary'
 
 let itinerary1Id: string
@@ -14,8 +14,9 @@ function fakeDateBetween(from: string, to: string): string {
   return faker.date.between({ from, to }).toISOString().split('T')[0]
 }
 
-describe('Itineraries API', async () => {
-  await setup()
+describe('Itineraries API', () => {
+  const { ensureLoggedIn, fetch, $fetch } = createApiSession({ saved: inject('apiSession') })
+  beforeAll(ensureLoggedIn)
 
   const now = today(getLocalTimeZone())
 
@@ -49,12 +50,11 @@ describe('Itineraries API', async () => {
 
   beforeAll(async () => {
     try {
-      const itinerary1 = await $fetch<ItineraryResponse>('/api/itineraries', { method: 'POST', body: itineraries[0] })
-      const itinerary2 = await $fetch<ItineraryResponse>('/api/itineraries', { method: 'POST', body: itineraries[1] })
-      const itinerary4 = await $fetch<ItineraryResponse>('/api/itineraries', { method: 'POST', body: itineraries[2] })
-
+      const itinerary1 = await $fetch<ItineraryResponse>('/api/v1/itineraries', { method: 'POST', body: itineraries[0] })
       itinerary1Id = itinerary1.data.id
+      const itinerary2 = await $fetch<ItineraryResponse>('/api/v1/itineraries', { method: 'POST', body: itineraries[1] })
       itinerary2Id = itinerary2.data.id
+      const itinerary4 = await $fetch<ItineraryResponse>('/api/v1/itineraries', { method: 'POST', body: itineraries[2] })
       itinerary4Id = itinerary4.data.id
     }
     catch (error) {
@@ -62,11 +62,22 @@ describe('Itineraries API', async () => {
         console.log(error.data)
         console.log(error.status)
       }
+      throw error
+    }
+  })
+
+  // Removes what a failed run left behind: Vitest runs afterAll even when a beforeAll or a test fails.
+  // After a full run the delete test has already removed these, so the requests find nothing.
+  afterAll(async () => {
+    for (const id of [itinerary1Id, itinerary2Id, itinerary3Id, itinerary4Id]) {
+      if (id) {
+        await fetch(`/api/v1/itineraries/${id}`, { method: 'DELETE' })
+      }
     }
   })
 
   it('creates an itinerary', async () => {
-    const created = await fetch('/api/itineraries', {
+    const created = await fetch('/api/v1/itineraries', {
       method: 'POST',
       body: JSON.stringify(itineraries[3]),
     })
@@ -75,21 +86,20 @@ describe('Itineraries API', async () => {
     expect(created).toBeDefined()
 
     const body = await created.json() as ItineraryResponse
+    itinerary3Id = body.data.id
     expect(body.data.name).toBe(itineraries[3].name)
     expect(String(body.data.start_date)).toBe(itineraries[3].start_date)
     expect(String(body.data.end_date)).toBe(itineraries[3].end_date)
 
-    const itinerary = await fetch(`/api/itineraries/${body.data.id}`)
+    const itinerary = await fetch(`/api/v1/itineraries/${body.data.id}`)
     expect(itinerary.status).toBe(200)
 
     const itinerary_body = await itinerary.json() as ItineraryResponse
     expect(itinerary_body.data.id).toBe(body.data.id)
-
-    itinerary3Id = body.data.id
   })
 
   it('retrieves an itinerary by id', async () => {
-    const response = await fetch(`/api/itineraries/${itinerary3Id}`)
+    const response = await fetch(`/api/v1/itineraries/${itinerary3Id}`)
     expect(response.status).toBe(200)
 
     const body = await response.json() as ItineraryResponse
@@ -100,14 +110,14 @@ describe('Itineraries API', async () => {
   })
 
   it('returns a list of itineraries', async () => {
-    const response = await $fetch<ItinerariesResponse>('/api/itineraries')
+    const response = await $fetch<ItinerariesResponse>('/api/v1/itineraries')
     expect(response).toBeDefined()
     expect(Array.isArray(response.data)).toBe(true)
     expect(response.data.length).toBe(4)
   })
 
   it('returns the itineraries grouped based on its date by past, ongoing, and upcoming', async () => {
-    const response = await $fetch<ItinerariesGroupedResponse>('/api/itineraries', {
+    const response = await $fetch<ItinerariesGroupedResponse>('/api/v1/itineraries', {
       params: {
         grouped: true,
       },
@@ -126,7 +136,7 @@ describe('Itineraries API', async () => {
   })
 
   it('updates an itinerary', async () => {
-    const updated = await fetch(`/api/itineraries/${itinerary3Id}`, {
+    const updated = await fetch(`/api/v1/itineraries/${itinerary3Id}`, {
       method: 'PATCH',
       body: JSON.stringify(itineraries[4]),
     })
@@ -140,10 +150,10 @@ describe('Itineraries API', async () => {
   })
 
   it('deletes an itinerary', async () => {
-    const deleted = await fetch(`/api/itineraries/${itinerary1Id}`, { method: 'DELETE' })
-    const deleted2 = await fetch(`/api/itineraries/${itinerary2Id}`, { method: 'DELETE' })
-    const deleted3 = await fetch(`/api/itineraries/${itinerary3Id}`, { method: 'DELETE' })
-    const deleted4 = await fetch(`/api/itineraries/${itinerary4Id}`, { method: 'DELETE' })
+    const deleted = await fetch(`/api/v1/itineraries/${itinerary1Id}`, { method: 'DELETE' })
+    const deleted2 = await fetch(`/api/v1/itineraries/${itinerary2Id}`, { method: 'DELETE' })
+    const deleted3 = await fetch(`/api/v1/itineraries/${itinerary3Id}`, { method: 'DELETE' })
+    const deleted4 = await fetch(`/api/v1/itineraries/${itinerary4Id}`, { method: 'DELETE' })
 
     expect(deleted.status).toBe(204)
     expect(deleted2.status).toBe(204)

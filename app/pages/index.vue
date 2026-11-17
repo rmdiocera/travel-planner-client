@@ -1,251 +1,256 @@
 <template>
   <NuxtLayout :name="layout">
-    <ClientOnly>
-      <Modal
-        v-if="!isMobile"
-        v-model:open="modalOpen"
-        :title="!isEditing ? 'Create Itinerary' : 'Edit Itinerary'"
-      >
-        <template #form>
-          <ItineraryForm
-            ref="itineraryForm"
-            :selected-itinerary="itineraryDisplayed"
-            @loading="isLoading = $event"
-            @is-modal-open="modalOpen = $event"
-            @itinerary-created="itineraryCreated = $event"
-            @itinerary-updated="itineraryUpdated = $event"
-          />
-        </template>
-        <template #action>
-          <div class="flex justify-end gap-2 w-full">
-            <UButton
-              label="Cancel"
-              color="neutral"
-              variant="outline"
-              :disabled="isLoading"
-              @click="() => { modalOpen = false; isEditing = false }"
+    <template v-if="!user">
+      You are not logged in!
+    </template>
+    <template v-else>
+      <ClientOnly>
+        <Modal
+          v-if="!isMobile"
+          v-model:open="modalOpen"
+          :title="!isEditing ? 'Create Itinerary' : 'Edit Itinerary'"
+        >
+          <template #form>
+            <ItineraryForm
+              ref="itineraryForm"
+              :selected-itinerary="itineraryDisplayed"
+              @loading="isLoading = $event"
+              @is-modal-open="modalOpen = $event"
+              @itinerary-created="itineraryCreated = $event"
+              @itinerary-updated="itineraryUpdated = $event"
             />
-            <UButton
-              :label="!isEditing ? 'Create' : 'Save Changes'"
-              color="primary"
-              :loading="isLoading"
-              :ui="{ base: 'dark:text-white' }"
-              data-testid="create-itinerary-btn"
-              @click="triggerSubmit"
-            />
-          </div>
-        </template>
-      </Modal>
-      <Slideover
-        v-else
-        v-model:open="slideoverOpen"
-        side="bottom"
-        :title="!isEditing ? 'Create Itinerary' : 'Edit Itinerary'"
-      >
-        <template #form>
-          <ItineraryForm
-            ref="itineraryForm"
-            :selected-itinerary="itineraryDisplayed"
-            @loading="isLoading = $event"
-            @is-modal-open="slideoverOpen = $event"
-            @itinerary-created="itineraryCreated = $event"
-            @itinerary-updated="itineraryUpdated = $event"
-          />
-        </template>
-        <template #action>
-          <div class="flex gap-2 w-full">
-            <UButton
-              block
-              class="basis-1/3"
-              label="Cancel"
-              color="neutral"
-              variant="outline"
-              @click="() => { slideoverOpen = false; isEditing = false }"
-            />
-            <UButton
-              block
-              class="basis-2/3"
-              :label="!isEditing ? 'Create' : 'Save Changes'"
-              color="primary"
-              :loading="isLoading"
-              :ui="{ base: 'dark:text-white' }"
-              data-testid="submit-place-btn"
-              @click="triggerSubmit"
-            />
-          </div>
-        </template>
-      </Slideover>
-      <ConfirmModal
-        v-model:open="confirmModalOpen"
-        title="Delete this itinerary?"
-      >
-        <template #description>
-          <UAlert
-            color="error"
-            variant="soft"
-            icon="i-lucide-triangle-alert"
-            :ui="{ root: 'items-center' }"
-          >
-            <template #title>
-              This will permanently delete <strong>{{ itineraryDisplayed?.name }}</strong> and all its associated data. This cannot be undone.
-            </template>
-          </UAlert>
-        </template>
-        <template #action>
-          <div class="flex justify-end gap-2 w-full">
-            <UButton
-              label="Cancel"
-              color="neutral"
-              variant="outline"
-              :disabled="isLoading"
-              @click="() => { confirmModalOpen = false }"
-            />
-            <UButton
-              label="Delete"
-              color="error"
-              :loading="isLoading"
-              data-testid="delete-itinerary-btn"
-              @click="handleDelete(itineraryDisplayed)"
-            />
-          </div>
-        </template>
-      </ConfirmModal>
-    </ClientOnly>
-    <div class="flex flex-col gap-4 pt-6 pb-12">
-      <div class="flex justify-between items-center">
-        <h1 class="text-lg font-medium">
-          Your Itineraries
-        </h1>
-        <div>
-          <UButton
-            v-if="!isMobile"
-            label="Create"
-            color="primary"
-            variant="solid"
-            icon="i-lucide-plus"
-            data-testid="open-modal-btn"
-            :disabled="!!itinerariesError"
-            :ui="{ base: 'disabled:opacity-50 aria-disabled:opacity-50 dark:text-white' }"
-            @click="() => { modalOpen = true; isEditing = false }"
-          />
-          <UButton
-            v-else
-            label="Create"
-            color="primary"
-            variant="solid"
-            icon="i-lucide-plus"
-            :disabled="!!itinerariesError"
-            :ui="{ base: 'disabled:opacity-50 aria-disabled:opacity-50 dark:text-white' }"
-            data-testid="open-slideover-btn"
-            @click="() => { slideoverOpen = true; isEditing = false }"
-          />
-        </div>
-      </div>
-      <div class="flex flex-col gap-4">
-        <template v-if="itinerariesPending">
-          <ItineraryGridSkeleton />
-        </template>
-        <template v-else-if="itinerariesError">
-          <EmptyState
-            icon="i-lucide-triangle-alert"
-            title="An unexpected error has occured."
-            description="Something went wrong while fetching your data. Check your connection and try again."
-            :ui="{ avatar: '[&>[data-slot=icon]]:text-error bg-error/10 rounded-xl' }"
-          >
-            <template #action>
+          </template>
+          <template #action>
+            <div class="flex justify-end gap-2 w-full">
               <UButton
-                label="Try again"
+                label="Cancel"
                 color="neutral"
                 variant="outline"
-                icon="i-lucide-refresh-cw"
+                :disabled="isLoading"
+                @click="() => { modalOpen = false; isEditing = false }"
+              />
+              <UButton
+                :label="!isEditing ? 'Create' : 'Save Changes'"
+                color="primary"
+                :loading="isLoading"
                 :ui="{ base: 'dark:text-white' }"
-                @click="refresh()"
-              />
-            </template>
-          </EmptyState>
-        </template>
-        <template v-else>
-          <div
-            v-if="hasItineraries"
-            class="flex flex-col gap-4"
-          >
-            <div
-              v-if="itineraries?.data.ongoing.length"
-              class="flex flex-col gap-2"
-            >
-              <h2 class="itinerary-heading">
-                Ongoing
-              </h2>
-              <Grid
-                :itineraries="itineraries.data.ongoing"
-                @is-editing="isEditing = $event"
-                @is-modal-open="modalOpen = $event"
-                @is-slideover-open="slideoverOpen = $event"
-                @is-confirm-modal-open="confirmModalOpen = $event"
-                @selected-itinerary="itineraryDisplayed = $event; itineraryBucket='ongoing'"
+                data-testid="create-itinerary-btn"
+                @click="triggerSubmit"
               />
             </div>
-            <div
-              v-if="itineraries?.data.upcoming.length"
-              class="flex flex-col gap-2"
-            >
-              <h2 class="itinerary-heading">
-                Upcoming
-              </h2>
-              <Grid
-                :itineraries="itineraries.data.upcoming"
-                @is-editing="isEditing = $event"
-                @is-modal-open="modalOpen = $event"
-                @is-slideover-open="slideoverOpen = $event"
-                @is-confirm-modal-open="confirmModalOpen = $event"
-                @selected-itinerary="itineraryDisplayed = $event; itineraryBucket='upcoming'"
+          </template>
+        </Modal>
+        <Slideover
+          v-else
+          v-model:open="slideoverOpen"
+          side="bottom"
+          :title="!isEditing ? 'Create Itinerary' : 'Edit Itinerary'"
+        >
+          <template #form>
+            <ItineraryForm
+              ref="itineraryForm"
+              :selected-itinerary="itineraryDisplayed"
+              @loading="isLoading = $event"
+              @is-modal-open="slideoverOpen = $event"
+              @itinerary-created="itineraryCreated = $event"
+              @itinerary-updated="itineraryUpdated = $event"
+            />
+          </template>
+          <template #action>
+            <div class="flex gap-2 w-full">
+              <UButton
+                block
+                class="basis-1/3"
+                label="Cancel"
+                color="neutral"
+                variant="outline"
+                @click="() => { slideoverOpen = false; isEditing = false }"
+              />
+              <UButton
+                block
+                class="basis-2/3"
+                :label="!isEditing ? 'Create' : 'Save Changes'"
+                color="primary"
+                :loading="isLoading"
+                :ui="{ base: 'dark:text-white' }"
+                data-testid="submit-place-btn"
+                @click="triggerSubmit"
               />
             </div>
-            <div
-              v-if="itineraries?.data.past.length"
-              class="flex flex-col gap-2"
+          </template>
+        </Slideover>
+        <ConfirmModal
+          v-model:open="confirmModalOpen"
+          title="Delete this itinerary?"
+        >
+          <template #description>
+            <UAlert
+              color="error"
+              variant="soft"
+              icon="i-lucide-triangle-alert"
+              :ui="{ root: 'items-center' }"
             >
-              <h2 class="itinerary-heading">
-                Past
-              </h2>
-              <Grid
-                v-if="itineraries"
-                :itineraries="itineraries.data.past"
+              <template #title>
+                This will permanently delete <strong>{{ itineraryDisplayed?.name }}</strong> and all its associated data. This cannot be undone.
+              </template>
+            </UAlert>
+          </template>
+          <template #action>
+            <div class="flex justify-end gap-2 w-full">
+              <UButton
+                label="Cancel"
+                color="neutral"
+                variant="outline"
+                :disabled="isLoading"
+                @click="() => { confirmModalOpen = false }"
+              />
+              <UButton
+                label="Delete"
+                color="error"
+                :loading="isLoading"
+                data-testid="delete-itinerary-btn"
+                @click="handleDelete(itineraryDisplayed)"
               />
             </div>
+          </template>
+        </ConfirmModal>
+      </ClientOnly>
+      <div class="flex flex-col gap-4 pt-6 pb-12">
+        <div class="flex justify-between items-center">
+          <h1 class="text-lg font-medium">
+            Your Itineraries
+          </h1>
+          <div>
+            <UButton
+              v-if="!isMobile"
+              label="Create"
+              color="primary"
+              variant="solid"
+              icon="i-lucide-plus"
+              data-testid="open-modal-btn"
+              :disabled="!!itinerariesError"
+              :ui="{ base: 'disabled:opacity-50 aria-disabled:opacity-50 dark:text-white' }"
+              @click="() => { modalOpen = true; isEditing = false }"
+            />
+            <UButton
+              v-else
+              label="Create"
+              color="primary"
+              variant="solid"
+              icon="i-lucide-plus"
+              :disabled="!!itinerariesError"
+              :ui="{ base: 'disabled:opacity-50 aria-disabled:opacity-50 dark:text-white' }"
+              data-testid="open-slideover-btn"
+              @click="() => { slideoverOpen = true; isEditing = false }"
+            />
           </div>
-          <EmptyState
-            v-else
-            icon="i-lucide-map"
-            title="No itineraries yet"
-            description="Start planning your next trip by creating your first itinerary."
-          >
-            <template #action>
-              <UButton
-                v-if="!isMobile"
-                label="Create"
-                color="primary"
-                variant="solid"
-                icon="i-lucide-plus"
-                data-testid="open-modal-btn"
-                :ui="{ base: 'dark:text-white' }"
-                @click="() => { modalOpen = true; isEditing = false }"
-              />
-              <UButton
-                v-else
-                label="Create"
-                color="primary"
-                variant="solid"
-                icon="i-lucide-plus"
-                data-testid="open-slideover-btn"
-                :ui="{ base: 'dark:text-white' }"
-                @click="() => { slideoverOpen = true; isEditing = false }"
-              />
-            </template>
-          </EmptyState>
-        </template>
+        </div>
+        <div class="flex flex-col gap-4">
+          <template v-if="itinerariesPending">
+            <ItineraryGridSkeleton />
+          </template>
+          <template v-else-if="itinerariesError">
+            <EmptyState
+              icon="i-lucide-triangle-alert"
+              title="An unexpected error has occured."
+              description="Something went wrong while fetching your data. Check your connection and try again."
+              :ui="{ avatar: '[&>[data-slot=icon]]:text-error bg-error/10 rounded-xl' }"
+            >
+              <template #action>
+                <UButton
+                  label="Try again"
+                  color="neutral"
+                  variant="outline"
+                  icon="i-lucide-refresh-cw"
+                  :ui="{ base: 'dark:text-white' }"
+                  @click="refresh()"
+                />
+              </template>
+            </EmptyState>
+          </template>
+          <template v-else>
+            <div
+              v-if="hasItineraries"
+              class="flex flex-col gap-4"
+            >
+              <div
+                v-if="itineraries?.data.ongoing.length"
+                class="flex flex-col gap-2"
+              >
+                <h2 class="itinerary-heading">
+                  Ongoing
+                </h2>
+                <Grid
+                  :itineraries="itineraries.data.ongoing"
+                  @is-editing="isEditing = $event"
+                  @is-modal-open="modalOpen = $event"
+                  @is-slideover-open="slideoverOpen = $event"
+                  @is-confirm-modal-open="confirmModalOpen = $event"
+                  @selected-itinerary="itineraryDisplayed = $event; itineraryBucket='ongoing'"
+                />
+              </div>
+              <div
+                v-if="itineraries?.data.upcoming.length"
+                class="flex flex-col gap-2"
+              >
+                <h2 class="itinerary-heading">
+                  Upcoming
+                </h2>
+                <Grid
+                  :itineraries="itineraries.data.upcoming"
+                  @is-editing="isEditing = $event"
+                  @is-modal-open="modalOpen = $event"
+                  @is-slideover-open="slideoverOpen = $event"
+                  @is-confirm-modal-open="confirmModalOpen = $event"
+                  @selected-itinerary="itineraryDisplayed = $event; itineraryBucket='upcoming'"
+                />
+              </div>
+              <div
+                v-if="itineraries?.data.past.length"
+                class="flex flex-col gap-2"
+              >
+                <h2 class="itinerary-heading">
+                  Past
+                </h2>
+                <Grid
+                  v-if="itineraries"
+                  :itineraries="itineraries.data.past"
+                />
+              </div>
+            </div>
+            <EmptyState
+              v-else
+              icon="i-lucide-map"
+              title="No itineraries yet"
+              description="Start planning your next trip by creating your first itinerary."
+            >
+              <template #action>
+                <UButton
+                  v-if="!isMobile"
+                  label="Create"
+                  color="primary"
+                  variant="solid"
+                  icon="i-lucide-plus"
+                  data-testid="open-modal-btn"
+                  :ui="{ base: 'dark:text-white' }"
+                  @click="() => { modalOpen = true; isEditing = false }"
+                />
+                <UButton
+                  v-else
+                  label="Create"
+                  color="primary"
+                  variant="solid"
+                  icon="i-lucide-plus"
+                  data-testid="open-slideover-btn"
+                  :ui="{ base: 'dark:text-white' }"
+                  @click="() => { slideoverOpen = true; isEditing = false }"
+                />
+              </template>
+            </EmptyState>
+          </template>
+        </div>
       </div>
-    </div>
+    </template>
   </NuxtLayout>
 </template>
 
@@ -272,6 +277,9 @@ const confirmModalOpen = ref(false)
 const isLoading = ref(false)
 const isEditing = ref(false)
 
+const user = useSanctumUser()
+const client = useSanctumClient()
+
 const { width } = useWindowSize()
 const isMobile = computed(() => width.value < 768)
 
@@ -279,10 +287,11 @@ const { showToast } = useAppToast()
 
 const itineraryBucket = ref<'ongoing' | 'upcoming'>()
 
-const { data: itineraries, pending: itinerariesPending, error: itinerariesError, refresh } = useLazyFetch<ItinerariesGroupedResponse>('/api/itineraries', {
+const { data: itineraries, pending: itinerariesPending, error: itinerariesError, refresh } = useLazySanctumFetch<ItinerariesGroupedResponse>('/api/v1/itineraries', {
   params: {
     grouped: true,
   },
+  immediate: !!user.value,
 })
 
 const itineraryCreated = ref<ItineraryResponse>({} as ItineraryResponse)
@@ -345,7 +354,7 @@ async function handleDelete(deletedItinerary: Itinerary | undefined) {
   isLoading.value = true
 
   try {
-    await $fetch<unknown>(`/api/itineraries/${deletedItinerary.id}`, { method: 'DELETE' })
+    await client<unknown>(`/api/v1/itineraries/${deletedItinerary.id}`, { method: 'DELETE' })
 
     confirmModalOpen.value = false
     showToast('Itinerary deleted successfully', 'i-lucide-circle-check')

@@ -1,16 +1,17 @@
-import { fetch, setup, $fetch } from '@nuxt/test-utils/e2e'
 import { readFileSync } from 'fs'
 import { FetchError } from 'ofetch'
 import { resolve } from 'path'
-import { describe, it, expect, beforeAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, inject } from 'vitest'
+import { createApiSession } from '../utils/apiSession'
 import type { PlaceResponse, PlacesResponse } from '../../app/types/place'
 
 let place1Id: string
 let place2Id: string
 let place3Id: string
 
-describe('Places API', async () => {
-  await setup()
+describe('Places API', () => {
+  const { ensureLoggedIn, fetch, $fetch } = createApiSession({ saved: inject('apiSession') })
+  beforeAll(ensureLoggedIn)
 
   const places = [
     {
@@ -84,19 +85,26 @@ describe('Places API', async () => {
     formData2.append('details', places[1].details)
 
     try {
-      const place1 = await fetch('/api/places', { method: 'POST', body: formData })
-      const place2 = await fetch('/api/places', { method: 'POST', body: formData2 })
-
-      const place1Body = await place1.json() as PlaceResponse
-      const place2Body = await place2.json() as PlaceResponse
-
-      place1Id = place1Body.data.id
-      place2Id = place2Body.data.id
+      const place1 = await $fetch<PlaceResponse>('/api/v1/places', { method: 'POST', body: formData })
+      place1Id = place1.data.id
+      const place2 = await $fetch<PlaceResponse>('/api/v1/places', { method: 'POST', body: formData2 })
+      place2Id = place2.data.id
     }
     catch (error) {
       if (error instanceof FetchError) {
         console.log(error.data)
         console.log(error.status)
+      }
+      throw error
+    }
+  })
+
+  // Removes what a failed run left behind: Vitest runs afterAll even when a beforeAll or a test fails.
+  // After a full run the delete test has already removed these, so the requests find nothing.
+  afterAll(async () => {
+    for (const id of [place1Id, place2Id, place3Id]) {
+      if (id) {
+        await fetch(`/api/v1/places/${id}`, { method: 'DELETE' })
       }
     }
   })
@@ -132,7 +140,7 @@ describe('Places API', async () => {
       formData.append(`images[${index}]`, image)
     })
 
-    const created = await fetch('/api/places', {
+    const created = await fetch('/api/v1/places', {
       method: 'POST',
       body: formData,
     })
@@ -140,6 +148,7 @@ describe('Places API', async () => {
     expect(created).toBeDefined()
 
     const body = await created.json() as PlaceResponse
+    place3Id = body.data.id
     expect(body.data.name).toBe(places[2].name)
     expect(body.data.address).toBe(places[2].address)
     expect(body.data.city).toBe(places[2].city)
@@ -155,17 +164,15 @@ describe('Places API', async () => {
 
     expect(body.data.images).toHaveLength(3)
 
-    const place = await fetch(`/api/places/${body.data.id}`)
+    const place = await fetch(`/api/v1/places/${body.data.id}`)
     expect(place.status).toBe(200)
 
     const place_body = await place.json() as PlaceResponse
     expect(place_body.data.id).toBe(body.data.id)
-
-    place3Id = body.data.id
   })
 
   it('retrieves a place by id', async () => {
-    const response = await fetch(`/api/places/${place3Id}`)
+    const response = await fetch(`/api/v1/places/${place3Id}`)
     expect(response.status).toBe(200)
 
     const body = await response.json() as PlaceResponse
@@ -180,14 +187,14 @@ describe('Places API', async () => {
   })
 
   it('returns a list of places', async () => {
-    const response = await $fetch<PlacesResponse>('/api/places')
+    const response = await $fetch<PlacesResponse>('/api/v1/places')
     expect(response).toBeDefined()
     expect(Array.isArray(response.data)).toBe(true)
     expect(response.data.length).toBe(3)
   })
 
   it('updates a place', async () => {
-    const updated = await fetch(`/api/places/${place3Id}`, {
+    const updated = await fetch(`/api/v1/places/${place3Id}`, {
       method: 'PATCH',
       body: JSON.stringify(places[3]),
     })
@@ -205,9 +212,9 @@ describe('Places API', async () => {
   })
 
   it('deletes a place', async () => {
-    const deleted = await fetch(`/api/places/${place1Id}`, { method: 'DELETE' })
-    const deleted2 = await fetch(`/api/places/${place2Id}`, { method: 'DELETE' })
-    const deleted3 = await fetch(`/api/places/${place3Id}`, { method: 'DELETE' })
+    const deleted = await fetch(`/api/v1/places/${place1Id}`, { method: 'DELETE' })
+    const deleted2 = await fetch(`/api/v1/places/${place2Id}`, { method: 'DELETE' })
+    const deleted3 = await fetch(`/api/v1/places/${place3Id}`, { method: 'DELETE' })
 
     expect(deleted.status).toBe(204)
     expect(deleted2.status).toBe(204)

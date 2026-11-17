@@ -1,5 +1,5 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { readFileSync } from 'fs'
 import { Blob, File } from 'node:buffer'
@@ -9,7 +9,7 @@ import { mountAdminPage } from '../../../utils/mountAdminPage'
 globalThis.Blob = Blob as any
 globalThis.File = File as any
 
-const dataRef = ref<string[] | object[]>([])
+const dataRef = ref<string[]>([])
 const pendingRef = ref(false)
 const errorRef = ref<Error | null>(null)
 const widthRef = ref(768)
@@ -18,14 +18,15 @@ const SELECTORS = {
   closeBtn: 'button[data-testid="close-slideover-btn"]',
   submitBtn: 'button[data-testid="submit-place-btn"]',
   countrySelect: 'button[data-testid="select-country-select"]',
+  tagsSelect: 'button[data-testid="select-tags-select"]',
 }
 const TEXT_FIELDS = ['name', 'address', 'city', 'website', 'phone']
 const ALL_FIELDS = ['images', ...TEXT_FIELDS, 'country']
 
-const fetchMock = vi.fn()
-const { toastAddMock } = vi.hoisted(() => {
-  return { toastAddMock: vi.fn() }
-})
+const { clientMock, toastAddMock } = vi.hoisted(() => ({
+  clientMock: vi.fn(),
+  toastAddMock: vi.fn(),
+}))
 
 mockNuxtImport('useToast', () => {
   return () => ({
@@ -38,9 +39,6 @@ mockNuxtImport('useFetch', () => {
     if (url === '/api/countries') {
       dataRef.value = ['Canada', 'United States of America', 'Mexico']
     }
-    else if (url === '/api/tags') {
-      dataRef.value = [{ id: 1, name: 'Park' }, { id: 2, name: 'Shrine' }]
-    }
 
     return {
       data: dataRef,
@@ -49,6 +47,20 @@ mockNuxtImport('useFetch', () => {
     }
   }
 })
+
+mockNuxtImport('useSanctumFetch', () => {
+  return (url: string) => {
+    if (url === '/api/v1/tags') {
+      return {
+        data: ref({ data: [{ id: 1, name: 'Park' }, { id: 2, name: 'Shrine' }] }),
+        pending: ref(false),
+        error: ref(null),
+      }
+    }
+  }
+})
+
+mockNuxtImport('useSanctumClient', () => () => clientMock)
 
 vi.mock(import('@vueuse/core'), async (importOriginal) => {
   const actual = await importOriginal()
@@ -62,6 +74,12 @@ vi.mock(import('@vueuse/core'), async (importOriginal) => {
 })
 
 describe('Admin index page', () => {
+  beforeEach(() => {
+    for (const mock of [clientMock, toastAddMock]) {
+      mock.mockReset()
+    }
+  })
+
   afterEach(() => {
     pendingRef.value = false
     errorRef.value = null
@@ -157,21 +175,26 @@ describe('Admin index page', () => {
 
   describe('Form submission, success path', () => {
     beforeEach(() => {
-      vi.stubGlobal('$fetch', fetchMock)
+      clientMock.mockResolvedValue({})
     })
 
-    afterEach(() => {
-      vi.unstubAllGlobals()
-    })
-
-    it('closes the slideover on successful POST', async () => {
-      fetchMock.mockResolvedValue({})
-
+    it('posts the form to the places endpoint', async () => {
       const { bodyWrapper } = await mountAdminPage()
       await bodyWrapper.find(SELECTORS.submitBtn).trigger('click')
       await flushPromises()
 
-      expect(fetchMock).toHaveBeenCalled()
+      expect(clientMock).toHaveBeenCalledWith('/api/v1/places', {
+        method: 'POST',
+        body: expect.any(FormData),
+      })
+    })
+
+    it('closes the slideover on successful POST', async () => {
+      const { bodyWrapper } = await mountAdminPage()
+      await bodyWrapper.find(SELECTORS.submitBtn).trigger('click')
+      await flushPromises()
+
+      expect(clientMock).toHaveBeenCalled()
       expect(bodyWrapper.find('[data-state="open"]').exists()).toBe(false)
     })
 
@@ -189,7 +212,7 @@ describe('Admin index page', () => {
     it('shows a loading state while the POST request is in flight and removes it on finish', async () => {
       let resolveFetch: (value: unknown) => void = () => {}
 
-      fetchMock.mockImplementation(() => {
+      clientMock.mockImplementation(() => {
         return new Promise((resolve) => {
           resolveFetch = resolve
         })
@@ -210,26 +233,16 @@ describe('Admin index page', () => {
   })
 
   describe('Form submission, error path', () => {
-    beforeEach(() => {
-      vi.stubGlobal('$fetch', fetchMock)
-    })
-
-    afterEach(() => {
-      fetchMock.mockReset()
-      vi.unstubAllGlobals()
-    })
-
     it('shows the correct validation errors on a 422 response', async () => {
-      fetchMock.mockRejectedValue({
+      clientMock.mockRejectedValue({
         data: {
-          data: {
-            errors: {
-              name: ['The name field is required.'],
-              details: ['The details field is required.'],
-              address: ['The address field is required.'],
-              country: ['The country field is required.'],
-              city: ['The city field is required.'],
-            },
+          message: 'The name field is required. (and 4 more errors)',
+          errors: {
+            name: ['The name field is required.'],
+            details: ['The details field is required.'],
+            address: ['The address field is required.'],
+            country: ['The country field is required.'],
+            city: ['The city field is required.'],
           },
         },
         statusCode: 422,
@@ -250,7 +263,7 @@ describe('Admin index page', () => {
     })
 
     it('shows an error toast with the correct title, icon, description and color on failed POST', async () => {
-      fetchMock.mockRejectedValue(new Error('Network Error'))
+      clientMock.mockRejectedValue(new Error('Network Error'))
 
       const { bodyWrapper } = await mountAdminPage()
       await bodyWrapper.find(SELECTORS.submitBtn).trigger('click')
@@ -291,6 +304,16 @@ describe('Admin index page', () => {
     })
   })
 
+  describe('Tags select', () => {
+    it('lists the tags from the API', async () => {
+      const { bodyWrapper } = await mountAdminPage()
+      await bodyWrapper.find(SELECTORS.tagsSelect).trigger('click')
+
+      const options = bodyWrapper.findAll('div[role="option"]').map(option => option.text())
+      expect(options).toEqual(['Park', 'Shrine'])
+    })
+  })
+
   describe('Integration with Slideover', async () => {
     it('Side value changes based on window width', async () => {
       const { bodyWrapper } = await mountAdminPage()
@@ -299,6 +322,19 @@ describe('Admin index page', () => {
       widthRef.value = 767
       await flushPromises()
       expect(bodyWrapper.find('[data-side="bottom"]').exists()).toBe(true)
+    })
+  })
+
+  describe('Route guard', () => {
+    it('sends a guest who opens /admin to the login page', async () => {
+      const router = useRouter()
+      onTestFinished(async () => {
+        await router.replace('/')
+      })
+
+      await router.push('/admin')
+
+      expect(router.currentRoute.value.path).toBe('/login')
     })
   })
 })

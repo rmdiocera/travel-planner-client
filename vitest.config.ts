@@ -2,6 +2,7 @@ import { defineConfig } from 'vitest/config'
 import { defineVitestProject } from '@nuxt/test-utils/config'
 import tsConfigPaths from 'vite-tsconfig-paths'
 import vue from '@vitejs/plugin-vue'
+import { loadE2eEnv } from './test/utils/loadE2eEnv'
 
 export default defineConfig({
   plugins: [tsConfigPaths(), vue()],
@@ -19,6 +20,8 @@ export default defineConfig({
           name: 'e2e',
           include: ['test/e2e/*.{test,spec}.ts'],
           environment: 'node',
+          env: loadE2eEnv(),
+          globalSetup: ['test/e2e/globalSetup.ts'],
           hookTimeout: 30000,
           testTimeout: 30000,
         },
@@ -39,6 +42,10 @@ export default defineConfig({
           name: 'nuxt',
           include: ['test/nuxt/**/*.{test,spec}.ts'],
           environment: 'nuxt',
+          setupFiles: ['test/nuxt/setup.ts'],
+          // Each test file starts Nuxt in a beforeAll hook. That can take longer than Vitest's default 10 s,
+          // and took over 30 s for some files in a slow full run (see CLAUDE.md Gotchas).
+          hookTimeout: 60000,
         },
       }),
     ],

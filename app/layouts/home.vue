@@ -9,7 +9,35 @@
       </template>
 
       <template #right>
-        <UNavigationMenu :items="items" />
+        <div class="flex gap-4 items-center">
+          <template v-if="!user">
+            <UButton
+              block
+              label="Log in"
+              color="primary"
+              to="/login"
+            />
+          </template>
+          <template v-else>
+            <UNavigationMenu :items="navItems" />
+            <UDropdownMenu
+              size="xl"
+              :items="dropdownItems"
+              :content="{
+                align: 'start',
+              }"
+            >
+              <UButton
+                color="primary"
+                variant="ghost"
+                :label="userInitial"
+                square
+                data-testid="header-user-menu-btn"
+                :ui="{ base: 'rounded-full text-white bg-black/75 hover:bg-black/50 cursor-pointer size-10 flex justify-center items-center text-md' }"
+              />
+            </UDropdownMenu>
+          </template>
+        </div>
       </template>
     </UHeader>
     <UContainer>
@@ -19,15 +47,35 @@
 </template>
 
 <script setup lang="ts">
-import type { NavigationMenuItem } from '@nuxt/ui'
+import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui'
+import type { User } from '~/types/user'
+
+const { user, logout } = useSanctumAuth<User>()
+
+const userInitial = computed(() => user.value?.first_name?.[0])
 
 const route = useRoute()
 
-const items = computed<NavigationMenuItem[]>(() => [
+const navItems = computed<NavigationMenuItem[]>(() => [
   {
     label: 'Itineraries',
     to: '/',
     active: route.path.startsWith('/'),
+  },
+])
+
+const dropdownItems = ref<DropdownMenuItem[]>([
+  {
+    label: 'Profile',
+    icon: 'i-lucide-user-round',
+    disabled: true,
+  },
+  {
+    label: 'Log Out',
+    icon: 'i-lucide-log-out',
+    onSelect: () => {
+      logout()
+    },
   },
 ])
 </script>

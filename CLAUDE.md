@@ -1,0 +1,134 @@
+# CLAUDE.md
+
+Guidance for working in this repo. Update it when conventions change.
+
+## What this is
+
+**Dayfarer** — the Nuxt 4 / Vue 3 frontend for a travel planner. It talks to a separate **Laravel API** (`/api/v1/...`, Laravel Sanctum auth) that is not in this repo. Users manage **itineraries** (grouped as past / ongoing / upcoming); **places** (with tags and images) are managed from an admin page.
+
+Stack: Nuxt 4 (`srcDir: 'app/'`), Nuxt UI 4 (Tailwind 4), `@nuxt/image`, `@nuxt/fonts`, `nuxt-auth-sanctum`, VueUse, `@internationalized/date`, ESLint (`@nuxt/eslint`, stylistic on), Vitest.
+
+## Commands
+
+```bash
+npm run dev          # http://localhost:3000
+npm run build | generate | preview
+npm run lint         # eslint .   (lint:fix to autofix)
+npm test             # vitest (watch)
+npm run test:run     # vitest run
+npx vitest run --project nuxt                    # component/page tests only
+npx vitest run --project e2e                     # needs the Laravel API running + E2E_USER_* (below)
+npx vitest run test/nuxt/pages/index.test.ts     # single file
+```
+
+The app needs no env vars for local dev (Sanctum `origin`/`baseUrl` are in `nuxt.config.ts`). `.env` (gitignored) holds the e2e settings: `E2E_USER_EMAIL` and `E2E_USER_PASSWORD` (a verified user), plus optional `E2E_API_BASE_URL` (default `http://localhost`) and `E2E_ORIGIN` (default `http://localhost:3000`). They can also be set in the shell, which wins over `.env`. Values are used as typed, `$` included: `test/utils/loadE2eEnv.ts` reads `.env` with Node's `parseEnv`, because Vite's `loadEnv` would expand `$word`. Never print or commit these values.
+
+## Layout
+
+```
+app/
+  app.vue                  UApp > NuxtPage
+  app.config.ts            Nuxt UI theme (primary = teal, disabled solid buttons turn gray unless loading, input/formField slot overrides)
+  assets/css/main.css      Tailwind + Nuxt UI imports, DM Sans, .itinerary-heading, .dayfarer-brand (Fraunces)
+  layouts/home.vue         Header (brand, nav, user dropdown w/ logout) + UContainer + <slot />
+  layouts/auth.vue         Centered brand + <slot /> for login / register / verify-email
+  middleware/              verification.global.ts (unverified users -> /verify-email), verified-flag.global.ts (?verified toast)
+  plugins/                 sanctum-csrf.client.ts (after a 419, fetches a new CSRF cookie so the next try works)
+  pages/                   index.vue (itineraries), admin/index.vue (add a place), login.vue, register.vue, verify-email.vue; places.vue (WIP, untracked)
+  components/
+    itinerary/             Form.vue, Grid.vue, GridSkeleton.vue
+    ui/                    Thin wrappers over Nuxt UI: Modal, Slideover, ConfirmModal, EmptyState
+    FormActions.vue        Currently unused
+  composables/             useAppToast.ts (showToast(title, icon, description?, color?)), useVerificationToast.ts (the "email verified" / "invalid link" toasts), useResendCooldown.ts (5-minute resend countdown kept in localStorage per user)
+  utils/date.ts            formatStartEndDate, dateDiffInDays, toCalendarDate (auto-imported)
+  types/                   itinerary.ts, place.ts, tag.ts, image.ts, user.ts (+ API response wrapper types)
+  server/api/              countries.get.ts only: the local @countrystatecity/countries list (serverDir is app/server)
+test/
+  e2e/                     Call the real Laravel API directly; globalSetup.ts logs in once per run
+  nuxt/                    Component + page tests (nuxt environment, happy-dom); setup.ts runs before every test
+  unit/                    Plain node tests, no Nuxt boot (loadE2eEnv.test.ts)
+  utils/                   mountXxx helpers; apiSession.ts (cookie-session client for e2e); loadE2eEnv.ts (the e2e settings)
+  fixtures/                Sample images for upload tests
+```
+
+## Architecture
+
+### Auth and API access: `nuxt-auth-sanctum`
+
+Every API call goes straight from the app (browser or SSR) to the Laravel API through `nuxt-auth-sanctum` in cookie mode (a session cookie plus the `XSRF-TOKEN` CSRF cookie). It is configured in `nuxt.config.ts` (`mode: 'cookie'`, `origin` localhost:3000, `baseUrl` localhost:80, user endpoint `api/v1/user`, `redirectIfUnauthenticated: true`). The old Nitro proxy, which sent one shared bearer token, is gone; don't add Nitro routes that call the Laravel API.
+
+- Reads: `useSanctumFetch` / `useLazySanctumFetch` with `/api/v1/...` (`useLazySanctumFetch('/api/v1/itineraries', { params: { grouped: true } })` in `pages/index.vue`, `useSanctumFetch<TagsResponse>('/api/v1/tags')` in `pages/admin/index.vue`). The user comes from `useSanctumUser()` / `useSanctumAuth()` (`user`, `logout`).
+- Mutations: `const client = useSanctumClient()`, then `client<T>(url, { method, body })`. It behaves like `$fetch` (resolves to the parsed body, throws on 4xx/5xx) and adds the base URL, credentials, `Accept: application/json` and the `X-XSRF-TOKEN` header; FormData bodies work as-is. Use `client.raw(...)` only when you need the status or headers (`verify-email.vue`). Never call the API with the global `$fetch`: it goes to the Nuxt origin without the session or the CSRF header.
+- Route access: `/admin` uses `definePageMeta({ middleware: ['sanctum:auth'] })`, so guests are sent to `/login`; `login` and `register` use `sanctum:guest`. `/` is public on purpose: guests see a placeholder (a hero is planned), users see their itineraries. Admin authorization is planned but not built, so any verified user can open `/admin`.
+- `redirectIfUnauthenticated: true` means a 401 from a Sanctum-client call in the browser clears the user and sends them to `/login`. A 419 (CSRF token mismatch, e.g. the backend lost its sessions, or the session cookie was deleted but `XSRF-TOKEN` wasn't) neither clears the user nor redirects. Laravel sends no new token with a 419, and the module only fetches one when the cookie is missing, so `app/plugins/sanctum-csrf.client.ts` fetches a new one after every 419, through the module's `sanctum:response` hook (which also runs for `ignoreResponseError` calls). The user's next try then goes through, or gets the 401 a lost session leads to. Never fire an authenticated request for a guest on a public page: gate it, as `pages/index.vue` does with `immediate: !!user.value`. A call made with `ignoreResponseError: true` skips that handling and must deal with a 401 itself (`verify-email.vue` does).
+
+Registration and email verification use the Laravel Fortify routes at the **backend root**, not `/api/v1`: `POST /register`, `/login`, `/logout`, `/email/verification-notification`, all through `useSanctumClient()` (the module adds credentials, `Accept: application/json` and the CSRF header). The current user is `GET /api/v1/user` (`useSanctumUser<User>()`, `User` in `app/types/user.ts`: `first_name`, `last_name`, `email`, `email_verified_at`; there is no `name`). A user with `email_verified_at === null` is unverified: `app/middleware/verification.global.ts` holds them on `/verify-email` (the API answers 403 to places/itineraries/tags). The emailed link is a backend URL, valid for 60 minutes, that redirects back to `/?verified=1` or `/?verified=0`. On a user's first verification it also logs them in when the browser has no session, so `?verified=1` with nobody logged in only happens for an account that was already verified. `app/middleware/verified-flag.global.ts` turns the flag into a toast and removes it from the URL. `POST /email/verification-notification` is limited to one request per 5 minutes per user, shared across all of that user's browsers (the registration email doesn't count). It answers 202 (sent), 204 (already verified), 401 (logged out) or 429 (limit reached). The 429's `Retry-After` is a whole number of seconds, normally 1 to 300 and `0` in the window's last second (meaning try now); CORS exposes it, but not the `X-RateLimit-*` headers. A 204 or a failed send also starts the 5 minutes; a 401 doesn't. `verify-email.vue` mirrors this with the countdown under the button. Domain vocabulary is in `GLOSSARY.md`.
+
+### API shapes
+
+Responses are Laravel resources wrapped in `{ data: ... }`. Types live in `app/types/` (`ItineraryResponse`, `ItinerariesGroupedResponse`, `PlacesResponse`, `TagsResponse`, ...). Dates are `YYYY-MM-DD` strings in practice even though `Itinerary.start_date/end_date` are typed `Date` — wrap with `new Date(...)` before formatting, as existing code does. Validation errors (422) arrive at `error.data.errors`: the body is `{ message, errors }`, with `errors` shaped `{ field: string[] }`. The user endpoint returns the user object at the top level, not wrapped in `{ data: ... }`.
+
+### Pages, layouts, state
+
+- `pages/index.vue` sets `definePageMeta({ layout: false })` and wraps itself in `<NuxtLayout name="home">`. It is public: it renders a "not logged in" placeholder when `useSanctumUser()` is empty and only fetches itineraries for a logged-in user (`immediate: !!user.value`).
+- All state is local `ref`s in the page; no Pinia/store. `Grid`/`Form` communicate upward through emits (`isModalOpen`, `isSlideoverOpen`, `isConfirmModalOpen`, `isEditing`, `selectedItinerary`, `itineraryCreated`, `itineraryUpdated`, `loading`), and the page mutates the fetched `itineraries` data locally (insert into the right bucket, splice on delete) rather than refetching. `reorderItineraries()` reassigns the object to force reactivity/ordering.
+- Responsive pattern: `useWindowSize` + `isMobile = width < 768`. Desktop uses `ui/Modal`, mobile uses `ui/Slideover` (`side="bottom"`) with the same `ItineraryForm`. Both are inside `<ClientOnly>`. Buttons exist in desktop/mobile variants with different `data-testid`s.
+- Forms: `UForm` with `:state` (one `ref({...})` object, not `reactive()`), `@submit`; parent triggers submit through an exposed `triggerSubmit()` (`defineExpose`) that calls `formRef.submit()`. Server validation errors are pushed back with `formRef.setErrors([...])`; any other failure shows an error toast. Create/edit share one form component keyed off `selectedItinerary`.
+- Feedback: `useAppToast().showToast(...)` — success uses `i-lucide-circle-check`; failure uses `'Something went wrong', 'i-lucide-circle-x', 'There was a problem with your request', 'error'`. Tests assert these exact strings.
+- Auth pages (`login`, `register`, `verify-email`) use `definePageMeta({ layout: false })` and `<NuxtLayout name="auth">`; `login` and `register` add `middleware: ['sanctum:guest']`. Their feedback is an inline `UAlert` at the top of the card (`role="alert"` for errors), not a toast. Toasts are kept for results shown after a redirect: the `?verified` handler and the session-expired notice. On `verify-email`, a success or info `UAlert` has no role: its text also goes to a status region that is on the page from the start, because screen readers often don't read out a live region that appears with its text already in it. Its Resend button uses `aria-disabled` during the countdown, so it keeps keyboard focus, and gets focus back after the request (loading disables it, and a browser moves focus off a disabled button).
+- Loading/error UX: `GridSkeleton` while pending, `EmptyState` with "Try again" (calls `refresh()`) on error, `EmptyState` for no data.
+- Past itineraries are read-only: Edit is disabled when `end_date < today`, and the Past grid isn't wired to edit/delete handlers.
+- Itinerary images are currently a hard-coded `/oc1.jpg` from `public/` via `NuxtImg`.
+
+## Docs lookup (MCP)
+
+Two remote MCP servers are configured for this project (`nuxt-ui-remote`, `nuxt-remote`). Their tools only load in a fresh session. If they aren't available, say so and fall back to fetching the docs rather than guessing.
+
+- **Nuxt UI MCP** (`https://ui.nuxt.com/mcp`): check it before using a component, prop, slot, or theme/`:ui` key you aren't certain about, and before editing `app.config.ts`. Installed version is Nuxt UI 4.x.
+- **Nuxt MCP** (`https://nuxt.com/mcp`): check it for framework and module questions (Nuxt 4 directory structure, composables, `nuxt.config`, `@nuxt/image`, `@nuxt/fonts`, `@nuxt/eslint`).
+- Neither covers `nuxt-auth-sanctum` (third-party); use its own docs.
+
+## Code style
+
+- `<script setup lang="ts">`. Block order is not uniform (`<template>` first in pages, `<script>` first in components) — follow the file you're editing.
+- Auto-imports are used for Vue/Nuxt APIs and `app/utils`, `app/composables`; components are also referenced via explicit imports in pages (`@/components/...` or `~/components/...`) — both aliases occur, keep the surrounding file's style.
+- Use `import type` for types; shared types go in `app/types/`, not inline in components.
+- Keep `components/ui/` wrappers logic-free — they only forward `v-model:open` (via `defineModel`) and expose `button` / `form` / `action` slots, plus a `data-testid` close button (`close-modal-btn`, `close-slideover-btn`, `close-confirm-modal-btn`).
+- Stylistic ESLint is enforced: no semicolons, single quotes, 2-space indent, trailing commas, `1tbs` braces with `catch`/`finally` on a new line (`}\n catch {`), consistent quote-props. `no-explicit-any` and `no-multiple-template-root` are off. Run `npm run lint` before finishing.
+- Naming: use camelCase for local variables, refs, functions and params, and PascalCase for components (prefer the Nuxt auto-name, e.g. `ItineraryGrid`). Keep snake_case only for API payload/response fields (`start_date`, `end_date`). Older code deviates (`country_names`, `selected_tags`, `new_itinerary`, `old_itinerary`, snake_case params in `utils/date.ts`, `Grid` imported as a bare name in `pages/index.vue`); don't copy those, and don't rename them unless asked.
+- Tailwind utility classes inline; theme tokens (`text-primary`, `text-muted`, `text-dimmed`, `bg-neutral-*`) with `dark:` variants. Primary buttons commonly add `:ui="{ base: 'dark:text-white' }"`. Empty fields use `variant="subtle"`, filled use `outline`. Icons are Lucide (`i-lucide-*`).
+- Add `data-testid` to any interactive element tests need.
+
+## Testing
+
+Vitest with three projects (`vitest.config.ts`):
+
+| Project | Include | Env | Notes |
+|---|---|---|---|
+| `unit` | `test/unit/**` | node | Plain functions, no Nuxt boot (`loadE2eEnv.test.ts`) |
+| `e2e` | `test/e2e/*.test.ts` | node | No Nuxt boot. `test/e2e/globalSetup.ts` logs in to the **real Laravel API** once per run (Fortify allows 5 logins a minute per email + IP, successful ones included) and `provide`s the session cookies. Each file resumes that session with `createApiSession({ saved: inject('apiSession') })` (`test/utils/apiSession.ts`) plus `beforeAll(ensureLoggedIn)`, and gets `fetch` (native `Response`) and `$fetch` (ofetch). Use `$fetch` for setup and body-only checks (it throws on a 4xx/5xx) and `fetch` when a test asserts the status; a setup `beforeAll` that catches a `FetchError` logs `error.data` and rethrows. If the login fails, the e2e files fail with the reason and the other projects still run; each login request gives up after 15 s, because Vitest starts no test file in any project until the global setup settles. Needs the backend and `E2E_USER_EMAIL` / `E2E_USER_PASSWORD` (from `.env` or the shell, via `loadE2eEnv()` in `vitest.config.ts`) for a verified user without two-factor auth and with no other itineraries, and a DB with no other places (counts are asserted) but with tags 5, 6 and 10, which `places.test.ts` attaches (without them its create gets a 422). Those ids come from the table's id counter, which deleting rows doesn't reset, so seed the tags after a fresh migrate. Creates and deletes its own data; store each created id as soon as its request returns, so the file's `afterAll` can delete what a failed run left behind (Vitest runs `afterAll` even when a `beforeAll` fails). 30s timeouts. |
+| `nuxt` | `test/nuxt/**` | nuxt (happy-dom) | Component/page tests with `mountSuspended`. `test/nuxt/setup.ts` runs before every test (see below). 60 s hook timeout, for starting Nuxt (see Gotchas). |
+
+Conventions in `test/nuxt`:
+- Mount through helpers in `test/utils/` (`mountIndexPage`, `mountAdminPage`, `mountModal`, `mountSlideover`, `mountLoginPage`, `mountRegisterPage`, `mountVerifyEmailPage`): they `mountSuspended`, register `onTestFinished(() => wrapper.unmount())`, and return `{ wrapper, bodyWrapper }` where `bodyWrapper = new DOMWrapper(document.body)` — needed because Nuxt UI modals/slideovers teleport to `<body>`. `mountIndexPage()` also clicks Create; pass `{ openCreateModal: false }` to skip that (guest view, delete flow).
+- Query by `data-testid` / `input[name=...]`; assert open state with `[data-state="open"]`.
+- Mock composables with `mockNuxtImport`. Spies come from `vi.hoisted` and are reset in `beforeEach` (`for (const mock of [...]) mock.mockReset()`): `useToast` (`toastAddMock`) and `useSanctumClient` (`clientMock`; assert the URL and options it was called with, and reject it with `{ data: { message, errors }, statusCode: 422 }` for validation errors). Don't stub the global `$fetch`. Data composables (`useLazySanctumFetch`, `useSanctumFetch`, `useFetch`) are mocked as plain functions returning `{ data, pending, error }` refs. `useWindowSize` goes through `vi.mock('@vueuse/core')` using a shared `widthRef` (768 = desktop, 767 = mobile). Fake timers pin "today" (`2026-07-01`) for calendar tests.
+- A page's route middleware is tested by navigating (`await useRouter().push('/admin')`) and asserting `currentRoute`; files that don't mock `useSanctumUser` run as a guest.
+- Group with nested `describe`s (Open/close behavior, Field rendering, Form submission success/error path, ...).
+- Global middleware is tested by importing the default export and calling it with a fake `to`, with `navigateTo` and `useSanctumUser` mocked through `mockNuxtImport`. Countdown tests fake only `Date`, `setInterval` and `clearInterval` (`vi.useFakeTimers({ toFake: [...] })`), which is all the countdown uses, so the timers the router and Nuxt UI depend on stay real: with every timer faked, a navigation that waits on a timer never finishes, and a test whose `mountSuspended` has to navigate first hangs. `flushPromises()` works either way (`index.test.ts` fakes every timer).
+- `test/nuxt/setup.ts` gives each test its own Vue `idPrefix`. Nuxt UI reports typing to its form 300 ms later, on a channel named after the form's id, and Vue would give the form the same id in every test, so typing at the end of one test could reach the next test's form (`register.test.ts` has a pair of tests for this).
+- happy-dom doesn't move focus off an element that becomes disabled, and its `blur()` ignores disabled elements. Where a browser would drop focus (a button that starts loading), move it with `document.body.focus()` (`verify-email.test.ts`, Keyboard focus).
+
+## Git workflow
+
+Feature branches (`feature/...`, `refactor/...`) off `main`, merged via numbered GitHub PRs. Commit subjects are short and lowercase-prefixed (`feature: ...`, `refactor: ...`). `public/oc*.{jpg,webp}` are sample images; `.nuxt`, `.output`, `.env*` are ignored.
+
+## Gotchas
+
+- `serverDir` is `app/server` (non-default) and only holds `api/countries.get.ts`.
+- `pages/places.vue` (WIP, untracked) still calls `/api/places`, which no longer exists, and has no `sanctum:auth` guard. The user is migrating it themselves.
+- `nuxt.config.ts` hard-codes Sanctum `origin`/`baseUrl` for local dev; they will need env-driven values for any deployment.
+- Every nuxt test file starts the Nuxt app in a `beforeAll` hook (`setupNuxt()`), which counts against `hookTimeout`. Page tests load most of the app's modules when the file is imported, before the hook; small files (`useResendCooldown`, the middleware and plugin tests) load them inside it. Run on its own on Windows, such a file took 10–12 s, so Vitest's default 10 s limit skipped it (`Hook timed out in 10000ms`), whether or not Docker was running. In one full run, loading modules was several times slower than usual (transform 168 s, against 35 s when the same command ran again straight after), and the four small files ran past a 30 s limit, so the nuxt project's `hookTimeout` is 60 s.
+- While it starts, `nuxt-auth-sanctum` asks the backend at `baseUrl` (localhost:80) for the current user. If the Docker backend accepts connections but never answers, that request runs into the hook timeout and whole files are skipped. Run the suite with `NUXT_PUBLIC_SANCTUM_BASE_URL=http://127.0.0.1:9` so that request fails fast. The log then shows `[nuxt-auth-sanctum:csr] An unexpected error occurred while fetching user identity ... bad port`; that is this lookup failing, not a test failure.
+- Some existing files have typos/oddities worth leaving alone unless asked (e.g. "occured" in the error empty state, `FormActions.vue` unused, `isDeleted` as a `ref` inside a watcher).
+- `README.md` is still the default Nuxt starter and is not a source of truth.
