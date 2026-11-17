@@ -1,8 +1,8 @@
-import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime'
+import { mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DOMWrapper, flushPromises } from '@vue/test-utils'
+import { flushPromises } from '@vue/test-utils'
 import { mountIndexPage } from '../../utils/mountIndexPage'
-import IndexPage from '@/pages/index.vue'
+import ItineraryGrid from '~/components/itinerary/Grid.vue'
 
 const widthRef = ref(768)
 const SELECTORS = {
@@ -11,16 +11,21 @@ const SELECTORS = {
   createBtn: 'button[data-testid="create-itinerary-btn"]',
 }
 
-const fetchMock = vi.fn()
-const { toastAddMock } = vi.hoisted(() => {
-  return { toastAddMock: vi.fn() }
-})
+const { clientMock, lazyFetchMock, toastAddMock } = vi.hoisted(() => ({
+  clientMock: vi.fn(),
+  lazyFetchMock: vi.fn(),
+  toastAddMock: vi.fn(),
+}))
 
-mockNuxtImport('useLazyFetch', () => {
-  return (url: string) => {
-    if (url === '/api/itineraries') {
+const upcomingItinerary = { id: 'i2', name: 'Trip to Kyoto', start_date: '2027-01-15', end_date: '2027-01-20' }
+let upcomingItineraries: Record<string, string>[] = []
+
+mockNuxtImport('useLazySanctumFetch', () => {
+  return (url: string, options?: Record<string, unknown>) => {
+    lazyFetchMock(url, options)
+    if (url === '/api/v1/itineraries') {
       return {
-        data: ref([]),
+        data: ref({ data: { past: [], ongoing: [], upcoming: [...upcomingItineraries] } }),
         pending: ref(false),
         error: ref(null),
         refresh: vi.fn(),
@@ -29,11 +34,17 @@ mockNuxtImport('useLazyFetch', () => {
   }
 })
 
+mockNuxtImport('useSanctumClient', () => () => clientMock)
+
 mockNuxtImport('useToast', () => {
   return () => ({
     add: toastAddMock,
   })
 })
+
+const verifiedUser = { id: 'u1', email: 'sam@example.com', email_verified_at: '2026-11-03T00:00:00Z' }
+const userRef = ref<Record<string, unknown> | null>(verifiedUser)
+mockNuxtImport('useSanctumUser', () => () => userRef)
 
 vi.mock(import('@vueuse/core'), async (importOriginal) => {
   const actual = await importOriginal()
@@ -51,6 +62,9 @@ describe('Index page', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-07-01'))
     widthRef.value = 768
+    for (const mock of [clientMock, lazyFetchMock, toastAddMock]) {
+      mock.mockReset()
+    }
   })
 
   afterEach(() => {
@@ -137,23 +151,29 @@ describe('Index page', () => {
   })
 
   describe('Form submission, success path', () => {
+    const createdItinerary = { data: { id: 'i1', name: 'Trip to Kyoto', start_date: '2027-01-15', end_date: '2027-01-20' } }
     beforeEach(() => {
-      vi.stubGlobal('$fetch', fetchMock)
+      clientMock.mockResolvedValue(createdItinerary)
     })
 
-    afterEach(() => {
-      fetchMock.mockReset()
-      vi.unstubAllGlobals()
+    it('posts the form to the itineraries endpoint', async () => {
+      const { bodyWrapper } = await mountIndexPage()
+      await bodyWrapper.find('input[name="name"]').setValue('Trip to Kyoto')
+      await bodyWrapper.find('button[data-testid="create-itinerary-btn"]').trigger('click')
+      await flushPromises()
+
+      expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries', {
+        method: 'POST',
+        body: { name: 'Trip to Kyoto', start_date: '', end_date: '' },
+      })
     })
 
     it('closes the modal on successful POST', async () => {
-      fetchMock.mockResolvedValue({})
-
       const { bodyWrapper } = await mountIndexPage()
       await bodyWrapper.find('button[data-testid="create-itinerary-btn"]').trigger('click')
       await flushPromises()
 
-      expect(fetchMock).toHaveBeenCalled()
+      expect(clientMock).toHaveBeenCalled()
       expect(bodyWrapper.find('[data-state="open"]').exists()).toBe(false)
     })
 
@@ -171,7 +191,7 @@ describe('Index page', () => {
     it('shows a loading state while the POST request is in flight and removes it on finish', async () => {
       let resolveFetch: (value: unknown) => void = () => {}
 
-      fetchMock.mockImplementation(() => {
+      clientMock.mockImplementation(() => {
         return new Promise((resolve) => {
           resolveFetch = resolve
         })
@@ -185,7 +205,7 @@ describe('Index page', () => {
 
       expect(submitBtn.attributes()).toHaveProperty('disabled')
 
-      resolveFetch({})
+      resolveFetch(createdItinerary)
       await flushPromises()
 
       expect(submitBtn.attributes('disabled')).toBeUndefined()
@@ -193,22 +213,13 @@ describe('Index page', () => {
   })
 
   describe('Form submission, error path', () => {
-    beforeEach(() => {
-      vi.stubGlobal('$fetch', fetchMock)
-    })
-
-    afterEach(() => {
-      vi.unstubAllGlobals()
-    })
-
     it('shows the correct validation errors on a 422 response', async () => {
-      fetchMock.mockRejectedValue({
+      clientMock.mockRejectedValue({
         data: {
-          data: {
-            errors: {
-              name: ['The name field is required.'],
-              end_date: ['The end date field must be a date after or equal to start date.'],
-            },
+          message: 'The name field is required. (and 1 more error)',
+          errors: {
+            name: ['The name field is required.'],
+            end_date: ['The end date field must be a date after or equal to start date.'],
           },
         },
         statusCode: 422,
@@ -237,7 +248,7 @@ describe('Index page', () => {
     })
 
     it('shows an error toast with the correct title, icon, description and color on failed POST', async () => {
-      fetchMock.mockRejectedValue(new Error('Network Error'))
+      clientMock.mockRejectedValue(new Error('Network Error'))
 
       const { bodyWrapper } = await mountIndexPage()
       await bodyWrapper.find('button[data-testid="create-itinerary-btn"]').trigger('click')
@@ -254,23 +265,148 @@ describe('Index page', () => {
 
   describe('Integration with Modal and Slideover', async () => {
     it('shows a modal when page is accessed on medium and large devices', async () => {
-      const wrapper = await mountSuspended(IndexPage)
+      const { wrapper, bodyWrapper } = await mountIndexPage({ openCreateModal: false })
       expect(wrapper.find('button[data-testid="open-modal-btn"]').exists()).toBe(true)
 
       await wrapper.find('button[data-testid="open-modal-btn"]').trigger('click')
-      const bodyWrapper = new DOMWrapper(document.body)
       expect(bodyWrapper.find('button[data-testid="close-modal-btn"]').exists()).toBe(true)
     })
 
     it('shows a slideover when page is accessed on small devices', async () => {
       widthRef.value = 767
 
-      const wrapper = await mountSuspended(IndexPage)
+      const { wrapper, bodyWrapper } = await mountIndexPage({ openCreateModal: false })
       expect(wrapper.find('button[data-testid="open-slideover-btn"]').exists()).toBe(true)
 
       await wrapper.find('button[data-testid="open-slideover-btn"]').trigger('click')
-      const bodyWrapper = new DOMWrapper(document.body)
       expect(bodyWrapper.find('button[data-testid="close-slideover-btn"]').exists()).toBe(true)
+    })
+  })
+
+  describe('Editing an itinerary', () => {
+    beforeEach(() => {
+      upcomingItineraries = [upcomingItinerary]
+      clientMock.mockResolvedValue({ data: upcomingItinerary })
+    })
+
+    afterEach(() => {
+      upcomingItineraries = []
+    })
+
+    it('sends a PATCH with the edited form for the selected itinerary', async () => {
+      const { wrapper, bodyWrapper } = await mountIndexPage({ openCreateModal: false })
+
+      // Grid's menu is a teleported Nuxt UI dropdown, so emit what its Edit item emits.
+      const grid = wrapper.findComponent(ItineraryGrid)
+      grid.vm.$emit('isModalOpen', true)
+      grid.vm.$emit('isEditing', true)
+      grid.vm.$emit('selectedItinerary', upcomingItinerary)
+      await nextTick()
+
+      await bodyWrapper.find('input[name="name"]').setValue('Trip to Kyoto and Nara')
+      await bodyWrapper.find('button[data-testid="create-itinerary-btn"]').trigger('click')
+      await flushPromises()
+
+      expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/i2', {
+        method: 'PATCH',
+        body: { name: 'Trip to Kyoto and Nara', start_date: '2027-01-15', end_date: '2027-01-20' },
+      })
+    })
+  })
+
+  describe('Deleting an itinerary', () => {
+    beforeEach(() => {
+      upcomingItineraries = [upcomingItinerary]
+    })
+
+    afterEach(() => {
+      upcomingItineraries = []
+    })
+
+    async function openDeleteConfirmation() {
+      const { wrapper, bodyWrapper } = await mountIndexPage({ openCreateModal: false })
+
+      // Grid's menu is a teleported Nuxt UI dropdown, so emit what its Delete item emits.
+      const grid = wrapper.findComponent(ItineraryGrid)
+      grid.vm.$emit('isConfirmModalOpen', true)
+      grid.vm.$emit('selectedItinerary', upcomingItinerary)
+      await nextTick()
+
+      return { wrapper, bodyWrapper }
+    }
+
+    it('sends a DELETE for the selected itinerary', async () => {
+      clientMock.mockResolvedValue(undefined)
+
+      const { bodyWrapper } = await openDeleteConfirmation()
+      await bodyWrapper.find('button[data-testid="delete-itinerary-btn"]').trigger('click')
+      await flushPromises()
+
+      expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/i2', { method: 'DELETE' })
+    })
+
+    it('removes the card on a successful DELETE', async () => {
+      clientMock.mockResolvedValue(undefined)
+
+      const { wrapper, bodyWrapper } = await openDeleteConfirmation()
+      expect(wrapper.text()).toContain('Trip to Kyoto')
+
+      await bodyWrapper.find('button[data-testid="delete-itinerary-btn"]').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.text()).not.toContain('Trip to Kyoto')
+      expect(wrapper.text()).toContain('No itineraries yet')
+    })
+
+    it('shows a success toast on a successful DELETE', async () => {
+      clientMock.mockResolvedValue(undefined)
+
+      const { bodyWrapper } = await openDeleteConfirmation()
+      await bodyWrapper.find('button[data-testid="delete-itinerary-btn"]').trigger('click')
+      await flushPromises()
+
+      expect(toastAddMock).toHaveBeenCalledWith({
+        title: 'Itinerary deleted successfully',
+        icon: 'i-lucide-circle-check',
+      })
+    })
+
+    it('keeps the card and shows an error toast on a failed DELETE', async () => {
+      clientMock.mockRejectedValue(new Error('Network Error'))
+
+      const { wrapper, bodyWrapper } = await openDeleteConfirmation()
+      await bodyWrapper.find('button[data-testid="delete-itinerary-btn"]').trigger('click')
+      await flushPromises()
+
+      expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/i2', { method: 'DELETE' })
+      expect(wrapper.text()).toContain('Trip to Kyoto')
+      expect(toastAddMock).toHaveBeenCalledWith({
+        title: 'Something went wrong',
+        icon: 'i-lucide-circle-x',
+        description: 'There was a problem with your request',
+        color: 'error',
+      })
+    })
+  })
+
+  describe('Guest view', () => {
+    afterEach(() => {
+      userRef.value = verifiedUser
+    })
+
+    it('does not request itineraries for a guest', async () => {
+      userRef.value = null
+
+      const { wrapper } = await mountIndexPage({ openCreateModal: false })
+
+      expect(wrapper.text()).toContain('You are not logged in!')
+      expect(lazyFetchMock).toHaveBeenCalledWith('/api/v1/itineraries', expect.objectContaining({ immediate: false }))
+    })
+
+    it('requests itineraries for a logged-in user', async () => {
+      await mountIndexPage({ openCreateModal: false })
+
+      expect(lazyFetchMock).toHaveBeenCalledWith('/api/v1/itineraries', expect.objectContaining({ immediate: true }))
     })
   })
 })

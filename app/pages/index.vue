@@ -278,6 +278,7 @@ const isLoading = ref(false)
 const isEditing = ref(false)
 
 const user = useSanctumUser()
+const client = useSanctumClient()
 
 const { width } = useWindowSize()
 const isMobile = computed(() => width.value < 768)
@@ -290,6 +291,7 @@ const { data: itineraries, pending: itinerariesPending, error: itinerariesError,
   params: {
     grouped: true,
   },
+  immediate: !!user.value,
 })
 
 const itineraryCreated = ref<ItineraryResponse>({} as ItineraryResponse)
@@ -352,7 +354,7 @@ async function handleDelete(deletedItinerary: Itinerary | undefined) {
   isLoading.value = true
 
   try {
-    await $fetch<unknown>(`/api/itineraries/${deletedItinerary.id}`, { method: 'DELETE' })
+    await client<unknown>(`/api/v1/itineraries/${deletedItinerary.id}`, { method: 'DELETE' })
 
     confirmModalOpen.value = false
     showToast('Itinerary deleted successfully', 'i-lucide-circle-check')

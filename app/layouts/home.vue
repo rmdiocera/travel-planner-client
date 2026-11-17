@@ -27,13 +27,14 @@
                 align: 'start',
               }"
             >
-            <UButton
-              color="primary"
-              variant="ghost"
-              :label="userInitial"
-              square
-              :ui="{ base: 'rounded-full text-white bg-black/75 hover:bg-black/50 cursor-pointer size-10 flex justify-center items-center text-md' }"
-            />
+              <UButton
+                color="primary"
+                variant="ghost"
+                :label="userInitial"
+                square
+                data-testid="header-user-menu-btn"
+                :ui="{ base: 'rounded-full text-white bg-black/75 hover:bg-black/50 cursor-pointer size-10 flex justify-center items-center text-md' }"
+              />
             </UDropdownMenu>
           </template>
         </div>
@@ -47,10 +48,11 @@
 
 <script setup lang="ts">
 import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui'
+import type { User } from '~/types/user'
 
-const { user, logout } = useSanctumAuth()
+const { user, logout } = useSanctumAuth<User>()
 
-const userInitial = computed(() => user.value?.name[0])
+const userInitial = computed(() => user.value?.first_name?.[0])
 
 const route = useRoute()
 
@@ -73,7 +75,7 @@ const dropdownItems = ref<DropdownMenuItem[]>([
     icon: 'i-lucide-log-out',
     onSelect: () => {
       logout()
-    }
+    },
   },
 ])
 </script>

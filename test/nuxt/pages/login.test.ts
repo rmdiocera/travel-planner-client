@@ -23,7 +23,7 @@ const SELECTORS = {
   email: 'input[data-testid="login-email-input"]',
   password: 'input[data-testid="login-password-input"]',
   toggle: 'button[data-testid="login-toggle-password-btn"]',
-  remember: 'button[role="checkbox"]',
+  remember: 'button[data-testid="login-remember-checkbox"]',
   submit: 'button[data-testid="login-submit-btn"]',
   alert: '[data-testid="login-alert"]',
   forgotLink: 'a[data-testid="login-forgot-link"]',
@@ -120,6 +120,24 @@ describe('Login page', () => {
       expect(wrapper.text()).toContain('Enter a valid email address')
       expect(loginMock).not.toHaveBeenCalled()
     })
+
+    it('shows no message when focus leaves an untouched field', async () => {
+      const { wrapper } = await mountLoginPage()
+
+      await wrapper.find(SELECTORS.email).trigger('blur')
+      await flushPromises()
+
+      expect(wrapper.text()).not.toContain('Enter your email')
+    })
+
+    it('checks a field once its value has changed', async () => {
+      const { wrapper } = await mountLoginPage()
+
+      await wrapper.find(SELECTORS.email).setValue('sam@')
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('Enter a valid email address')
+    })
   })
 
   describe('Form submission', () => {
@@ -194,7 +212,8 @@ describe('Login page', () => {
     it('focuses the password field on 422', async () => {
       loginMock.mockRejectedValue({ response: { status: 422 } })
       const { wrapper } = await mountLoginPage()
-      await flushPromises() // let UInput's delayed autofocus on email settle first
+      // UInput autofocuses Email from a timer; wait for it, or it can take focus back after the 422.
+      await vi.waitFor(() => expect(document.activeElement).toBe(wrapper.find(SELECTORS.email).element))
 
       await fillAndSubmit(wrapper)
 

@@ -10,7 +10,7 @@ const { login } = useSanctumAuth()
 
 const passwordRef = useTemplateRef('passwordInput')
 
-const state = reactive({
+const state = ref({
   email: '',
   password: '',
   remember: false,
@@ -19,7 +19,7 @@ const loading = ref(false)
 const showPassword = ref(false)
 const formError = ref('')
 
-function validate(values: typeof state): FormError[] {
+function validate(values: typeof state.value): FormError[] {
   const errors: FormError[] = []
 
   if (!values.email) {
@@ -42,9 +42,9 @@ async function handleSubmit() {
 
   try {
     await login({
-      email: state.email,
-      password: state.password,
-      remember: state.remember,
+      email: state.value.email,
+      password: state.value.password,
+      remember: state.value.remember,
     })
   }
   catch (error: any) {
@@ -52,7 +52,7 @@ async function handleSubmit() {
 
     if (status === 422) {
       formError.value = 'Incorrect email or password.'
-      state.password = ''
+      state.value.password = ''
       passwordRef.value?.inputRef?.focus()
     }
     else if (status === 429) {
@@ -87,9 +87,12 @@ async function handleSubmit() {
             data-testid="login-alert"
           />
 
+          <!-- Fields are checked when their value changes, not on blur: a blur check flags fields the user only
+               passed through, and its message can push the links below the form out from under a click. -->
           <UForm
             :state="state"
             :validate="validate"
+            :validate-on="['input', 'change']"
             novalidate
             :loading-auto="false"
             class="grid gap-4"

@@ -9,12 +9,6 @@ export default defineNuxtConfig({
   ],
   devtools: { enabled: true },
   css: ['~/assets/css/main.css'],
-  runtimeConfig: {
-    apiKey: '',
-    public: {
-      apiBaseUrl: '',
-    },
-  },
   srcDir: 'app/',
   serverDir: 'app/server',
   compatibilityDate: '2025-07-15',
@@ -27,8 +21,9 @@ export default defineNuxtConfig({
     mode: 'cookie',
     origin: 'http://localhost:3000',
     baseUrl: 'http://localhost:80',
+    redirectIfUnauthenticated: true,
     endpoints: {
-      user: 'api/v1/user'
-    }
+      user: 'api/v1/user',
+    },
   },
 })

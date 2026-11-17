@@ -151,6 +151,7 @@
               multiple
               placeholder="Select tags..."
               class="w-full"
+              data-testid="select-tags-select"
             >
               <div
                 class="flex flex-wrap gap-1.5 min-h-9 w-full rounded-md border border-neutral-200 dark:border-neutral-800 px-2 py-1.5 cursor-pointer"
@@ -217,15 +218,21 @@
 import Slideover from '@/components/ui/Slideover.vue'
 import { useWindowSize } from '@vueuse/core'
 import { ref } from 'vue'
-import type { Tag } from '~/types/tag'
+import type { Tag, TagsResponse } from '~/types/tag'
+
+definePageMeta({
+  middleware: ['sanctum:auth'],
+})
 
 const { width } = useWindowSize()
 const side = computed(() => width.value < 768 ? 'bottom' : 'right')
 
+const client = useSanctumClient()
+
 const { data: countries, pending: countriesPending, error: countriesError } = useFetch('/api/countries')
 const country_names = ref(countries.value)
 
-const { data: tags } = await useFetch<{ data: { id: number, name: string }[] }>('/api/tags')
+const { data: tags } = await useSanctumFetch<TagsResponse>('/api/v1/tags')
 const tag_values = computed(() => tags.value?.data)
 const selected_tags = ref<Tag[]>([])
 const selected_tag_ids = computed(() => selected_tags.value.map(tag => tag.id))
@@ -299,7 +306,7 @@ async function handleSubmit() {
   }
 
   try {
-    await $fetch('/api/places', {
+    await client('/api/v1/places', {
       method: 'POST',
       body: payload,
     })
@@ -308,7 +315,7 @@ async function handleSubmit() {
     showToast('Place created successfully', 'i-lucide-circle-check')
   }
   catch (error: any) {
-    const apiErrors = error?.data?.data?.errors
+    const apiErrors = error?.data?.errors
 
     if (apiErrors) {
       (formRef.value as any)?.setErrors(

@@ -46,6 +46,7 @@ const form = ref({
 })
 
 const { showToast } = useAppToast()
+const client = useSanctumClient()
 
 watch(startDate, (value) => {
   if (value) {
@@ -70,7 +71,7 @@ async function handleSubmit() {
 
   try {
     if (!isEditing.value) {
-      const new_itinerary = await $fetch<ItineraryResponse>('/api/itineraries', {
+      const new_itinerary = await client<ItineraryResponse>('/api/v1/itineraries', {
         method: 'POST',
         body: form.value,
       })
@@ -80,7 +81,7 @@ async function handleSubmit() {
       showToast('Itinerary created successfully', 'i-lucide-circle-check')
     }
     else {
-      const updated_itinerary = await $fetch<ItineraryResponse>(`/api/itineraries/${props.selectedItinerary?.id}`, {
+      const updated_itinerary = await client<ItineraryResponse>(`/api/v1/itineraries/${props.selectedItinerary?.id}`, {
         method: 'PATCH',
         body: form.value,
       })
@@ -94,7 +95,7 @@ async function handleSubmit() {
     endDate.value = undefined
   }
   catch (error: any) {
-    const apiErrors = error?.data?.data?.errors
+    const apiErrors = error?.data?.errors
 
     if (apiErrors) {
       (formRef.value as any)?.setErrors(
