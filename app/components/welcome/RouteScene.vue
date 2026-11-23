@@ -280,9 +280,10 @@ const seconds = (value: number) => `${value.toFixed(2)}s`
 .rt .bub-pin { fill: none; stroke: #0d9488; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .rt .bub-text { font-family: 'Fraunces', serif; font-weight: 600; font-variation-settings: 'opsz' 14; fill: #404040; dominant-baseline: central; }
 
-:global(.dark) .rt .ln:not(.reveal), :global(.dark) .rt .route, :global(.dark) .rt .bub-pin { stroke: #2dd4bf; }
-:global(.dark) .rt .bub-shape { fill: #262626; stroke: #404040; }
-:global(.dark) .rt .bub-text { fill: #e5e5e5; }
+/* Not :global(.dark): Vue would turn the whole rule into a bare `.dark` rule. Scoping only marks the last part, so this works. */
+.dark .rt .ln:not(.reveal), .dark .rt .route, .dark .rt .bub-pin { stroke: #2dd4bf; }
+.dark .rt .bub-shape { fill: #262626; stroke: #404040; }
+.dark .rt .bub-text { fill: #e5e5e5; }
 
 .route-scene.is-fading { animation: rt-fade .6s ease forwards; }
 .route-scene.is-still .ln { animation: none; stroke-dashoffset: 0; opacity: 1; }
