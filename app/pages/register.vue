@@ -259,7 +259,6 @@ async function handleSubmit() {
               label="Create account"
               block
               :loading="loading"
-              :ui="{ base: 'dark:text-white' }"
               data-testid="register-submit-btn"
             />
           </UForm>

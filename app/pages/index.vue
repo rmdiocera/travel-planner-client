@@ -33,7 +33,6 @@
                 :label="!isEditing ? 'Create' : 'Save Changes'"
                 color="primary"
                 :loading="isLoading"
-                :ui="{ base: 'dark:text-white' }"
                 data-testid="create-itinerary-btn"
                 @click="triggerSubmit"
               />
@@ -72,7 +71,6 @@
                 :label="!isEditing ? 'Create' : 'Save Changes'"
                 color="primary"
                 :loading="isLoading"
-                :ui="{ base: 'dark:text-white' }"
                 data-testid="submit-place-btn"
                 @click="triggerSubmit"
               />
@@ -129,7 +127,7 @@
               icon="i-lucide-plus"
               data-testid="open-modal-btn"
               :disabled="!!itinerariesError"
-              :ui="{ base: 'disabled:opacity-50 aria-disabled:opacity-50 dark:text-white' }"
+              :ui="{ base: 'disabled:opacity-50 aria-disabled:opacity-50' }"
               @click="() => { modalOpen = true; isEditing = false }"
             />
             <UButton
@@ -139,7 +137,7 @@
               variant="solid"
               icon="i-lucide-plus"
               :disabled="!!itinerariesError"
-              :ui="{ base: 'disabled:opacity-50 aria-disabled:opacity-50 dark:text-white' }"
+              :ui="{ base: 'disabled:opacity-50 aria-disabled:opacity-50' }"
               data-testid="open-slideover-btn"
               @click="() => { slideoverOpen = true; isEditing = false }"
             />
@@ -162,7 +160,6 @@
                   color="neutral"
                   variant="outline"
                   icon="i-lucide-refresh-cw"
-                  :ui="{ base: 'dark:text-white' }"
                   @click="refresh()"
                 />
               </template>
@@ -232,7 +229,6 @@
                   variant="solid"
                   icon="i-lucide-plus"
                   data-testid="open-modal-btn"
-                  :ui="{ base: 'dark:text-white' }"
                   @click="() => { modalOpen = true; isEditing = false }"
                 />
                 <UButton
@@ -242,7 +238,6 @@
                   variant="solid"
                   icon="i-lucide-plus"
                   data-testid="open-slideover-btn"
-                  :ui="{ base: 'dark:text-white' }"
                   @click="() => { slideoverOpen = true; isEditing = false }"
                 />
               </template>

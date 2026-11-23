@@ -17,6 +17,10 @@
   --font-sans: 'DM Sans', sans-serif;
 }
 
+/* Nuxt UI sets --ui-primary inside @layer theme (500 light, 400 dark). Unlayered rules win, so both modes are set here. */
+:root, .light { --ui-primary: var(--ui-color-primary-700); }
+.dark { --ui-primary: var(--ui-color-primary-400); }
+
 [data-slot="error"] {
   animation: slideDown 0.5s ease;
 }

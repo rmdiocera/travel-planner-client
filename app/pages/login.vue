@@ -164,7 +164,6 @@ async function handleSubmit() {
               label="Log in"
               block
               :loading="loading"
-              :ui="{ base: 'dark:text-white' }"
               data-testid="login-submit-btn"
             />
           </UForm>
