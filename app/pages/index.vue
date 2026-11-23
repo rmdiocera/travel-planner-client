@@ -8,7 +8,7 @@
         <Modal
           v-if="!isMobile"
           v-model:open="modalOpen"
-          :title="!isEditing ? 'Create Itinerary' : 'Edit Itinerary'"
+          :title="!isEditing ? 'Create trip' : 'Edit trip'"
         >
           <template #form>
             <ItineraryForm
@@ -30,7 +30,7 @@
                 @click="() => { modalOpen = false; isEditing = false }"
               />
               <UButton
-                :label="!isEditing ? 'Create' : 'Save Changes'"
+                :label="!isEditing ? 'Create' : 'Save changes'"
                 color="primary"
                 :loading="isLoading"
                 data-testid="create-itinerary-btn"
@@ -43,7 +43,7 @@
           v-else
           v-model:open="slideoverOpen"
           side="bottom"
-          :title="!isEditing ? 'Create Itinerary' : 'Edit Itinerary'"
+          :title="!isEditing ? 'Create trip' : 'Edit trip'"
         >
           <template #form>
             <ItineraryForm
@@ -68,7 +68,7 @@
               <UButton
                 block
                 class="basis-2/3"
-                :label="!isEditing ? 'Create' : 'Save Changes'"
+                :label="!isEditing ? 'Create' : 'Save changes'"
                 color="primary"
                 :loading="isLoading"
                 data-testid="submit-place-btn"
@@ -79,7 +79,7 @@
         </Slideover>
         <ConfirmModal
           v-model:open="confirmModalOpen"
-          title="Delete this itinerary?"
+          title="Delete this trip?"
         >
           <template #description>
             <UAlert
@@ -116,7 +116,7 @@
       <div class="flex flex-col gap-4 pt-6 pb-12">
         <div class="flex justify-between items-center">
           <h1 class="text-lg font-medium">
-            Your Itineraries
+            Your trips
           </h1>
           <div>
             <UButton
@@ -218,8 +218,8 @@
             <EmptyState
               v-else
               icon="i-lucide-map"
-              title="No itineraries yet"
-              description="Start planning your next trip by creating your first itinerary."
+              title="No trips yet"
+              description="Start planning your next trip by creating your first trip."
             >
               <template #action>
                 <UButton
@@ -352,7 +352,7 @@ async function handleDelete(deletedItinerary: Itinerary | undefined) {
     await client<unknown>(`/api/v1/itineraries/${deletedItinerary.id}`, { method: 'DELETE' })
 
     confirmModalOpen.value = false
-    showToast('Itinerary deleted successfully', 'i-lucide-circle-check')
+    showToast('Trip deleted successfully', 'i-lucide-circle-check')
 
     if (itineraries.value?.data) {
       if (itineraryBucket.value) {

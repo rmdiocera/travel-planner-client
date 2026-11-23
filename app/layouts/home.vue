@@ -58,7 +58,7 @@ const route = useRoute()
 
 const navItems = computed<NavigationMenuItem[]>(() => [
   {
-    label: 'Itineraries',
+    label: 'Trips',
     to: '/',
     active: route.path.startsWith('/'),
   },
@@ -71,7 +71,7 @@ const dropdownItems = ref<DropdownMenuItem[]>([
     disabled: true,
   },
   {
-    label: 'Log Out',
+    label: 'Log out',
     icon: 'i-lucide-log-out',
     onSelect: () => {
       logout()

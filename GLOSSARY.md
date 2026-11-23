@@ -1,6 +1,6 @@
 # Dayfarer
 
-A travel planner where users build itineraries made of places. This glossary currently covers registration, sessions and email verification.
+A travel planner where Users plan their trips day by day. This glossary currently covers registration, sessions, email verification, trips and the app's main pages.
 
 ## Language
 
@@ -52,8 +52,18 @@ _Avoid_: Verify page, verification page
 The five-minute wait after a User resends the verification email before they may resend again, shown to them as a countdown.
 _Avoid_: Timeout, throttle, rate limit
 
+### Trips
+
+**Trip**:
+One journey a User plans in Dayfarer, with a name and the dates it starts and ends.
+_Avoid_: Itinerary
+
 ### Pages
 
-**Itineraries page**:
-The app's home page, where a logged-in User sees their itineraries. It is also where a User lands after following a verification link.
-_Avoid_: Front page, home page, landing page
+**Trips page**:
+The page where a logged-in User sees their trips, grouped as ongoing, upcoming and past. It is also where a User lands after verifying their email.
+_Avoid_: Itineraries page, front page, home page, landing page
+
+**Welcome page**:
+What a Guest sees at the app's address: what Dayfarer does, and the way to create an account. A logged-in User sees the Trips page there instead.
+_Avoid_: Landing page, home page, guest page
