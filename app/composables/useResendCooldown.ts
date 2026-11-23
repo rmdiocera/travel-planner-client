@@ -8,15 +8,6 @@ export function formatCountdown(totalSeconds: number): string {
   return `${minutes}:${String(seconds).padStart(2, '0')}`
 }
 
-function getLocalStorage(): Storage | undefined {
-  try {
-    return window.localStorage
-  }
-  catch {
-    return undefined
-  }
-}
-
 export function useResendCooldown(userId: string) {
   const storage = getLocalStorage()
   const endsAt: Ref<number> = storage
