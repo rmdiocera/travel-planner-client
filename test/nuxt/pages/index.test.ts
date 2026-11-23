@@ -183,7 +183,7 @@ describe('Index page', () => {
       await flushPromises()
 
       expect(toastAddMock).toHaveBeenCalledWith({
-        title: 'Itinerary created successfully',
+        title: 'Trip created successfully',
         icon: 'i-lucide-circle-check',
       })
     })
@@ -355,7 +355,7 @@ describe('Index page', () => {
       await flushPromises()
 
       expect(wrapper.text()).not.toContain('Trip to Kyoto')
-      expect(wrapper.text()).toContain('No itineraries yet')
+      expect(wrapper.text()).toContain('No trips yet')
     })
 
     it('shows a success toast on a successful DELETE', async () => {
@@ -366,7 +366,7 @@ describe('Index page', () => {
       await flushPromises()
 
       expect(toastAddMock).toHaveBeenCalledWith({
-        title: 'Itinerary deleted successfully',
+        title: 'Trip deleted successfully',
         icon: 'i-lucide-circle-check',
       })
     })
@@ -404,8 +404,9 @@ describe('Index page', () => {
     })
 
     it('requests itineraries for a logged-in user', async () => {
-      await mountIndexPage({ openCreateModal: false })
+      const { wrapper } = await mountIndexPage({ openCreateModal: false })
 
+      expect(wrapper.text()).toContain('Your trips')
       expect(lazyFetchMock).toHaveBeenCalledWith('/api/v1/itineraries', expect.objectContaining({ immediate: true }))
     })
   })

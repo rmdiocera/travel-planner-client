@@ -78,7 +78,7 @@ async function handleSubmit() {
 
       emit('isModalOpen', false)
       emit('itineraryCreated', new_itinerary)
-      showToast('Itinerary created successfully', 'i-lucide-circle-check')
+      showToast('Trip created successfully', 'i-lucide-circle-check')
     }
     else {
       const updated_itinerary = await client<ItineraryResponse>(`/api/v1/itineraries/${props.selectedItinerary?.id}`, {
@@ -88,7 +88,7 @@ async function handleSubmit() {
 
       emit('isModalOpen', false)
       emit('itineraryUpdated', updated_itinerary)
-      showToast('Itinerary updated successfully', 'i-lucide-circle-check')
+      showToast('Trip updated successfully', 'i-lucide-circle-check')
     }
 
     startDate.value = undefined
@@ -136,7 +136,7 @@ async function handleSubmit() {
       <div class="grid gap-2">
         <div class="grid gap-2 grid-cols-2">
           <UFormField
-            label="Start Date"
+            label="Start date"
             name="start_date"
           >
             <UPopover v-model:open="startDateCalOpen">
@@ -164,7 +164,7 @@ async function handleSubmit() {
             </UPopover>
           </UFormField>
           <UFormField
-            label="End Date"
+            label="End date"
             name="end_date"
           >
             <UPopover v-model:open="endDateCalOpen">

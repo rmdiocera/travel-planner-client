@@ -16,4 +16,9 @@ describe('Home layout', () => {
     userRef.value = { first_name: '', last_name: null }
     expect((await mountSuspended(HomeLayout)).find(AVATAR).text()).toBe('')
   })
+
+  it('labels the nav item "Trips" for a User', async () => {
+    userRef.value = { first_name: 'Sam', last_name: null }
+    expect((await mountSuspended(HomeLayout)).text()).toContain('Trips')
+  })
 })
