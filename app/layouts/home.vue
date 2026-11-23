@@ -1,6 +1,10 @@
 <template>
-  <div>
-    <UHeader>
+  <div class="min-h-screen flex flex-col">
+    <!-- No menu toggle: the header has no menu, and below 1024px the toggle would open an empty one. -->
+    <UHeader
+      :toggle="false"
+      class="shrink-0"
+    >
       <template #title>
         <div class="dayfarer-brand text-3xl text-primary flex items-center gap-1">
           <UIcon name="i-lucide-footprints" />
@@ -10,14 +14,26 @@
 
       <template #right>
         <div class="flex gap-4 items-center">
-          <template v-if="!user">
+          <div
+            v-if="!user"
+            class="flex items-center gap-2"
+          >
             <UButton
-              block
               label="Log in"
-              color="primary"
+              color="neutral"
+              variant="ghost"
               to="/login"
+              data-testid="header-login-btn"
             />
-          </template>
+            <!-- On phones the header only has room for the logo and Log in. -->
+            <UButton
+              label="Create account"
+              color="primary"
+              to="/register"
+              class="hidden sm:inline-flex"
+              data-testid="header-register-btn"
+            />
+          </div>
           <template v-else>
             <UNavigationMenu :items="navItems" />
             <UDropdownMenu
@@ -40,9 +56,11 @@
         </div>
       </template>
     </UHeader>
-    <UContainer>
+    <UContainer data-testid="home-container">
       <slot />
     </UContainer>
+    <!-- Full-width content below the container, such as the Welcome page's closing band. -->
+    <slot name="after" />
   </div>
 </template>
 
