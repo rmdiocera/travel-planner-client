@@ -129,6 +129,18 @@ describe('WelcomeRouteScene', () => {
       await nextTick()
       expect(names(wrapper)).toEqual(['Senso-ji', 'Tokyo Skytree', 'Meiji Jingu'])
     })
+
+    it('stops when reduced motion is turned on', async () => {
+      const wrapper = await mountScene()
+      motionRef.value = 'reduce'
+      await nextTick()
+      expect(wrapper.find(PAUSE_BTN).exists()).toBe(false)
+      expect(wrapper.find(ROOT).classes()).toContain('is-still')
+
+      vi.advanceTimersByTime(60_000)
+      await nextTick()
+      expect(names(wrapper)).toEqual(['Senso-ji', 'Tokyo Skytree', 'Meiji Jingu'])
+    })
   })
 
   it('clears its timers on unmount', async () => {

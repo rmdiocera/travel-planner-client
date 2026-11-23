@@ -113,6 +113,12 @@ watch(() => props.layout, () => {
   }
 })
 
+// Turning reduced motion on while the page is open stops the scene too, since the pause button goes away.
+// Turning it off leaves the scene still, with "Play animation", until the visitor presses play.
+watch(isReduced, (reduce) => {
+  if (cycle && reduce) showStill(0)
+})
+
 onBeforeUnmount(() => {
   cycle?.stop()
 })
