@@ -1,7 +1,8 @@
 <template>
   <NuxtLayout :name="layout">
     <template v-if="!user">
-      You are not logged in!
+      <WelcomeHero />
+      <WelcomeHowItWorks />
     </template>
     <template v-else>
       <ClientOnly>
@@ -246,6 +247,13 @@
         </div>
       </div>
     </template>
+    <!-- The home layout puts this below its container, so the band runs the full width of the window. -->
+    <template
+      v-if="!user"
+      #after
+    >
+      <WelcomeClosing />
+    </template>
   </NuxtLayout>
 </template>
 
@@ -258,6 +266,9 @@ import Grid from '~/components/itinerary/Grid.vue'
 import ItineraryGridSkeleton from '~/components/itinerary/GridSkeleton.vue'
 import ConfirmModal from '~/components/ui/ConfirmModal.vue'
 import EmptyState from '~/components/ui/EmptyState.vue'
+import WelcomeClosing from '~/components/welcome/Closing.vue'
+import WelcomeHero from '~/components/welcome/Hero.vue'
+import WelcomeHowItWorks from '~/components/welcome/HowItWorks.vue'
 import type { Itinerary, ItineraryResponse, ItinerariesGroupedResponse } from '~/types/itinerary'
 
 definePageMeta({
