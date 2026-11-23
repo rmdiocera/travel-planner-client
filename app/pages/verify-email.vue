@@ -200,7 +200,6 @@ async function handleLogout() {
               label="Resend email"
               :loading="isSending"
               :aria-disabled="!isReady || isCoolingDown ? 'true' : undefined"
-              :ui="{ base: 'dark:text-white' }"
               data-testid="verify-resend-btn"
               @click="resend"
             />
