@@ -427,6 +427,20 @@ describe('Index page', () => {
       expect(document.activeElement?.id).toBe('how-it-works-heading')
     })
 
+    it('titles the Welcome page for a Guest', async () => {
+      userRef.value = null
+
+      await mountIndexPage({ openCreateModal: false })
+
+      await vi.waitFor(() => expect(document.title).toBe('Dayfarer: plan every day of your trip'))
+    })
+
+    it('titles the Trips page for a User', async () => {
+      await mountIndexPage({ openCreateModal: false })
+
+      await vi.waitFor(() => expect(document.title).toBe('Your trips · Dayfarer'))
+    })
+
     it('does not show the Welcome page to a User', async () => {
       const { wrapper } = await mountIndexPage({ openCreateModal: false })
 

@@ -286,6 +286,19 @@ const isEditing = ref(false)
 const user = useSanctumUser()
 const client = useSanctumClient()
 
+// A Guest sees the Welcome page here, so the link preview describes Dayfarer.
+const pageTitle = computed(() => user.value ? 'Your trips · Dayfarer' : 'Dayfarer: plan every day of your trip')
+useSeoMeta({
+  title: pageTitle,
+  ogTitle: pageTitle,
+  description: WELCOME_TEXT,
+  ogDescription: WELCOME_TEXT,
+  // Link previews need an absolute image URL.
+  ogImage: `${useRuntimeConfig().public.siteUrl}/og-image.png`,
+  ogType: 'website',
+  twitterCard: 'summary_large_image',
+})
+
 const { width } = useWindowSize()
 const isMobile = computed(() => width.value < 768)
 
