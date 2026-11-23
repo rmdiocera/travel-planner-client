@@ -9,6 +9,12 @@ export default defineNuxtConfig({
   ],
   devtools: { enabled: true },
   css: ['~/assets/css/main.css'],
+  runtimeConfig: {
+    public: {
+      // The app's own address, for absolute URLs such as og:image. Set NUXT_PUBLIC_SITE_URL in deployment.
+      siteUrl: 'http://localhost:3000',
+    },
+  },
   srcDir: 'app/',
   serverDir: 'app/server',
   compatibilityDate: '2025-07-15',
@@ -16,6 +22,12 @@ export default defineNuxtConfig({
     config: {
       stylistic: true,
     },
+  },
+  fonts: {
+    families: [
+      // Load Fraunces' optical-size axis, so the hero's 14px names can use 'opsz' 14.
+      { name: 'Fraunces', provider: 'google', weights: [600], providerOptions: { google: { experimental: { variableAxis: { opsz: [['9', '144']] } } } } },
+    ],
   },
   sanctum: {
     mode: 'cookie',

@@ -394,12 +394,65 @@ describe('Index page', () => {
       userRef.value = verifiedUser
     })
 
-    it('does not request itineraries for a guest', async () => {
+    it('shows the Welcome page to a Guest', async () => {
       userRef.value = null
 
       const { wrapper } = await mountIndexPage({ openCreateModal: false })
 
-      expect(wrapper.text()).toContain('You are not logged in!')
+      const text = wrapper.text()
+      expect(text).toContain('Plan every day of your trip')
+      expect(text).toContain('How it works')
+      expect(text).toContain('Keep notes and checklists')
+      expect(text).toContain('Ready to plan your next trip?')
+      expect(text).not.toContain('You are not logged in!')
+    })
+
+    it('links a Guest to registration and the steps', async () => {
+      userRef.value = null
+
+      const { wrapper } = await mountIndexPage({ openCreateModal: false })
+
+      expect(wrapper.find('[data-testid="hero-register-btn"]').attributes('href')).toBe('/register')
+      expect(wrapper.find('[data-testid="closing-register-btn"]').attributes('href')).toBe('/register')
+      expect(wrapper.find('[data-testid="hero-how-btn"]').attributes('href')).toMatch(/#how-it-works$/)
+    })
+
+    it('moves focus to How it works', async () => {
+      userRef.value = null
+
+      const { wrapper } = await mountIndexPage({ openCreateModal: false, attachTo: document.body })
+      await wrapper.find('[data-testid="hero-how-btn"]').trigger('click')
+      await flushPromises()
+
+      expect(document.activeElement?.id).toBe('how-it-works-heading')
+    })
+
+    it('titles the Welcome page for a Guest', async () => {
+      userRef.value = null
+
+      await mountIndexPage({ openCreateModal: false })
+
+      await vi.waitFor(() => expect(document.title).toBe('Dayfarer: plan every day of your trip'))
+    })
+
+    it('titles the Trips page for a User', async () => {
+      await mountIndexPage({ openCreateModal: false })
+
+      await vi.waitFor(() => expect(document.title).toBe('Your trips · Dayfarer'))
+    })
+
+    it('does not show the Welcome page to a User', async () => {
+      const { wrapper } = await mountIndexPage({ openCreateModal: false })
+
+      expect(wrapper.text()).not.toContain('Ready to plan your next trip?')
+      expect(wrapper.find('[data-testid="hero-register-btn"]').exists()).toBe(false)
+    })
+
+    it('does not request itineraries for a guest', async () => {
+      userRef.value = null
+
+      await mountIndexPage({ openCreateModal: false })
+
       expect(lazyFetchMock).toHaveBeenCalledWith('/api/v1/itineraries', expect.objectContaining({ immediate: false }))
     })
 
