@@ -82,6 +82,16 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [[
     },
   },
 ]])
+
+// On a phone the time (or, for an outside stop, its date) sits under the name; from 768px up it has its own column.
+const inlineTime = computed<string | null>(() => {
+  if (props.variant === 'outside') {
+    return formatDayDate(visitDate(props.stop))
+  }
+  const start = formatTime(props.stop.start_time)
+  const end = formatTime(props.stop.end_time)
+  return start && end ? `${start} – ${end}` : start
+})
 </script>
 
 <template>
@@ -107,7 +117,10 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [[
         :data-testid="`stop-toggle-${stop.id}`"
         @click="$emit('toggle')"
       >
-        <div class="w-14 shrink-0 text-sm tabular-nums">
+        <div
+          class="hidden w-14 shrink-0 text-sm tabular-nums md:block"
+          data-testid="stop-time"
+        >
           <template v-if="variant === 'outside'">
             <span class="text-warning">{{ formatDayDate(visitDate(stop)) }}</span>
           </template>
@@ -124,11 +137,25 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [[
           >Any time</span>
         </div>
         <div class="min-w-0 flex-1">
-          <p class="truncate font-medium">
+          <p class="line-clamp-2 font-medium">
             {{ stop.place.name }}
           </p>
-          <p class="truncate text-sm text-muted">
-            {{ stop.place.city }}
+          <p
+            v-if="inlineTime"
+            class="text-sm font-medium tabular-nums md:hidden"
+            :class="variant === 'outside' ? 'text-warning' : 'text-primary'"
+            data-testid="stop-time-inline"
+          >
+            {{ inlineTime }}
+          </p>
+          <!-- aria-hidden: the preview sits inside the toggle button, so it would otherwise be read out with the button's name. -->
+          <p
+            v-if="!open && stop.place.details?.trim()"
+            class="hidden text-sm text-muted md:line-clamp-2"
+            aria-hidden="true"
+            data-testid="place-details-preview"
+          >
+            {{ stop.place.details }}
           </p>
           <p
             v-if="stop.marked_visited"
@@ -141,11 +168,12 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [[
           <TripPlacePhoto :place="stop.place" />
           <span
             v-if="stop.marked_visited"
-            class="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-primary text-inverted"
+            class="absolute -right-1 -top-1 flex size-5.5 items-center justify-center rounded-full bg-primary text-inverted md:size-6"
+            data-testid="stop-visited-badge"
           >
             <UIcon
               name="i-lucide-check"
-              class="size-3"
+              class="size-3.5 md:size-4"
             />
           </span>
         </span>
