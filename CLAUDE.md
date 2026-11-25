@@ -38,7 +38,7 @@ app/
   components/
     itinerary/             Form.vue, Grid.vue, GridSkeleton.vue
     trip/                  Header.vue, DaysSkeleton.vue, DayCard.vue, StopRow.vue, OutsideSection.vue, PlacePhoto.vue, PlaceSearch.vue (the trip page's parts; auto-names are TripHeader, TripDayCard, ...)
-    welcome/               Hero.vue, RouteScene.vue (the animated hero scene), HowItWorks.vue, Closing.vue
+    welcome/               Hero.vue, RouteScene.vue (the animated hero scene), HowItWorks.vue, Closing.vue; Preview{Frame,Trip,Day,List,Photo}.vue: How it works previews, static look-alikes of the trip UI with sample data (inert, no requests; rows drawn like the trip page's on a phone at every width: 76px thumbnail, time under the name, no city; placeholder until a photo path is set)
     ui/                    Thin wrappers over Nuxt UI: Modal, Slideover, ConfirmModal, EmptyState
     FormActions.vue        Currently unused
   composables/             useAppToast.ts (showToast(title, icon, description?, color?)), useTripLists.ts (the trip page's lists, items, notes, checklists and checklist items, and every request that changes them; shared through `tripListsKey`), useDragReorder.ts (drag-to-reorder for one container), useTripDays.ts (the trip page's days and stops, and every request that changes them; shared through `tripDaysKey`), usePlaceSearch.ts (debounced place search), useClientToday.ts (today's date, browser only), useVerificationToast.ts (the "email verified" / "invalid link" toasts), useResendCooldown.ts (5-minute resend countdown kept in localStorage per user), useHeroPause.ts (the hero's pause, kept in localStorage)
