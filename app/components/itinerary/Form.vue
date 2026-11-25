@@ -55,11 +55,22 @@ const form = ref({
 const { showToast } = useAppToast()
 const client = useSanctumClient()
 
+// The date pickers don't report changes to the form, so a date error would stay up after the user fixes it.
+// Re-check only while one is showing, so picking the first date doesn't raise an error early.
+function recheckDates() {
+  const showing = ((formRef.value as any)?.getErrors?.() ?? [])
+    .some((error: FormError) => error.name === 'start_date' || error.name === 'end_date')
+  if (showing) {
+    void (formRef.value as any).validate({ name: ['start_date', 'end_date'], silent: true })
+  }
+}
+
 watch(startDate, (value) => {
   if (value) {
     form.value.start_date = value.toString()
     startDateCalOpen.value = false
   }
+  recheckDates()
 })
 
 watch(endDate, (value) => {
@@ -67,6 +78,7 @@ watch(endDate, (value) => {
     form.value.end_date = value.toString()
     endDateCalOpen.value = false
   }
+  recheckDates()
 })
 
 function triggerSubmit() {
@@ -79,6 +91,7 @@ function clearDates() {
   endDate.value = undefined
   form.value.start_date = ''
   form.value.end_date = ''
+  recheckDates()
 }
 
 // A trip may have no dates yet, but never only one of them.

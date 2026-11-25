@@ -343,6 +343,41 @@ describe('Index page', () => {
       expect(clientMock).not.toHaveBeenCalled()
     })
 
+    it('does not show a date error just because one date was picked', async () => {
+      const { bodyWrapper } = await mountIndexPage()
+      await pickDate(bodyWrapper, 'start', '2026-07-21')
+      await flushPromises()
+
+      expect(bodyWrapper.findAll('.text-error')).toHaveLength(0)
+    })
+
+    it('removes the date error once the missing date is picked', async () => {
+      const { bodyWrapper } = await mountIndexPage()
+      await fillName(bodyWrapper)
+      await pickDate(bodyWrapper, 'start', '2026-07-21')
+      await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
+      await flushPromises()
+      expect(bodyWrapper.findAll('.text-error').map(e => e.text())).toContain('Select an end date too')
+
+      await pickDate(bodyWrapper, 'end', '2026-07-28')
+      await flushPromises()
+
+      expect(bodyWrapper.findAll('.text-error')).toHaveLength(0)
+    })
+
+    it('removes the date error when the dates are cleared', async () => {
+      const { bodyWrapper } = await mountIndexPage()
+      await fillName(bodyWrapper)
+      await pickDate(bodyWrapper, 'start', '2026-07-21')
+      await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
+      await flushPromises()
+
+      await bodyWrapper.find('button[data-testid="clear-dates-btn"]').trigger('click')
+      await flushPromises()
+
+      expect(bodyWrapper.findAll('.text-error')).toHaveLength(0)
+    })
+
     it('clears the errors when the form is closed and opened again', async () => {
       const { wrapper, bodyWrapper } = await mountIndexPage()
       await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
