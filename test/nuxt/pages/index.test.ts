@@ -159,6 +159,27 @@ describe('Index page', () => {
       const dateYesterdayDiv = bodyWrapper.find('div[data-value="2026-06-30"]')
       expect(dateYesterdayDiv.attributes()).toHaveProperty('data-disabled')
     })
+
+    it('disables end dates before the chosen start date', async () => {
+      const { bodyWrapper } = await mountIndexPage()
+      await pickDate(bodyWrapper, 'start', '2026-07-21')
+      await bodyWrapper.find('button[data-testid="select-end-date-btn"]').trigger('click')
+
+      // Calendars from earlier tests can still be in <body>; the newest one is the one just opened.
+      const endDay = (date: string) => bodyWrapper.findAll(`[data-testid="end-date-cal"] div[data-value="${date}"]`).at(-1)!
+      expect(endDay('2026-07-20').attributes()).toHaveProperty('data-disabled')
+      expect(endDay('2026-07-21').attributes()).not.toHaveProperty('data-disabled')
+    })
+
+    it('disables end dates before today when no start date is chosen', async () => {
+      const { bodyWrapper } = await mountIndexPage()
+      await bodyWrapper.find('button[data-testid="select-end-date-btn"]').trigger('click')
+
+      // Calendars from earlier tests can still be in <body>; the newest one is the one just opened.
+      const endDay = (date: string) => bodyWrapper.findAll(`[data-testid="end-date-cal"] div[data-value="${date}"]`).at(-1)!
+      expect(endDay('2026-06-30').attributes()).toHaveProperty('data-disabled')
+      expect(endDay('2026-07-01').attributes()).not.toHaveProperty('data-disabled')
+    })
   })
 
   describe('Form submission, success path', () => {
@@ -436,9 +457,11 @@ describe('Index page', () => {
     })
 
     it('shows the saved dates on their own day west of UTC', async () => {
-      vi.stubEnv('TZ', 'America/Los_Angeles')
+      // Unsetting TZ doesn't reset Node's time zone, so put the original zone back by name.
+      const originalZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+      process.env.TZ = 'America/Los_Angeles'
       onTestFinished(() => {
-        vi.unstubAllEnvs()
+        process.env.TZ = originalZone
       })
 
       const { wrapper, bodyWrapper } = await mountIndexPage({ openCreateModal: false })
@@ -446,6 +469,27 @@ describe('Index page', () => {
 
       expect(bodyWrapper.find('button[data-testid="select-start-date-btn"] span:not([aria-hidden])').text()).toBe('Jan 15, 2027')
       expect(bodyWrapper.find('button[data-testid="select-end-date-btn"] span:not([aria-hidden])').text()).toBe('Jan 20, 2027')
+    })
+
+    it('lets an edit pick a start date before today', async () => {
+      const ongoingItinerary = { id: 'i3', name: 'Trip to Osaka', start_date: '2026-06-28', end_date: '2026-07-05' }
+      const { wrapper, bodyWrapper } = await mountIndexPage({ openCreateModal: false })
+      await openEditForm(wrapper, ongoingItinerary)
+      await bodyWrapper.find('button[data-testid="select-start-date-btn"]').trigger('click')
+
+      expect(bodyWrapper.find('div[data-value="2026-06-27"]').attributes()).not.toHaveProperty('data-disabled')
+    })
+
+    it('keeps an edit\'s end date from going before today', async () => {
+      const ongoingItinerary = { id: 'i3', name: 'Trip to Osaka', start_date: '2026-06-28', end_date: '2026-07-05' }
+      const { wrapper, bodyWrapper } = await mountIndexPage({ openCreateModal: false })
+      await openEditForm(wrapper, ongoingItinerary)
+      await bodyWrapper.find('button[data-testid="select-end-date-btn"]').trigger('click')
+
+      // Calendars from earlier tests can still be in <body>; the newest one is the one just opened.
+      const endDay = (date: string) => bodyWrapper.findAll(`[data-testid="end-date-cal"] div[data-value="${date}"]`).at(-1)!
+      expect(endDay('2026-06-30').attributes()).toHaveProperty('data-disabled')
+      expect(endDay('2026-07-01').attributes()).not.toHaveProperty('data-disabled')
     })
 
     it('opens the edit form for a trip without dates', async () => {

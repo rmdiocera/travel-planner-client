@@ -34,6 +34,10 @@ const endDate = shallowRef<CalendarDate | undefined>(
 )
 const dateToday = today(getLocalTimeZone())
 
+// An end date can't be before the start, nor before today: an edit that moved a trip's end into the past
+// would make it a past trip, and Edit trip is off for those, so it couldn't be undone.
+const endMinValue = computed(() => startDate.value && startDate.value.compare(dateToday) > 0 ? startDate.value : dateToday)
+
 const df = new DateFormatter('en-US', {
   dateStyle: 'medium',
 })
@@ -190,7 +194,7 @@ async function handleSubmit() {
               <template #content>
                 <UCalendar
                   v-model="startDate"
-                  :min-value="dateToday"
+                  :min-value="isEditing ? undefined : dateToday"
                   class="p-2"
                   data-testid="start-date-cal"
                 />
@@ -218,6 +222,7 @@ async function handleSubmit() {
               <template #content>
                 <UCalendar
                   v-model="endDate"
+                  :min-value="endMinValue"
                   class="p-2"
                   data-testid="end-date-cal"
                 />
