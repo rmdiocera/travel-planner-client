@@ -194,6 +194,17 @@ describe('Trip page', () => {
       expect(wrapper.find('[data-testid="trip-name"]').text()).toBe('Japan and Korea')
     })
 
+    it('does not leave Delete trip spinning when Edit trip is still saving', async () => {
+      clientMock.mockReturnValue(new Promise(() => {}))
+      const { wrapper, bodyWrapper } = await mountTripPage()
+      await selectMenuItem(wrapper, 'trip-menu-btn', 'Edit trip')
+      await bodyWrapper.find('[data-testid="save-trip-btn"]').trigger('click')
+      await flushPromises()
+      await selectMenuItem(wrapper, 'trip-menu-btn', 'Delete trip')
+
+      expect(bodyWrapper.find('[data-testid="delete-trip-btn"]').attributes()).not.toHaveProperty('disabled')
+    })
+
     it('opens Edit trip from Add dates', async () => {
       tripRef.value = { data: { ...japanTrip, start_date: null, end_date: null } }
       const { wrapper, bodyWrapper } = await mountTripPage()

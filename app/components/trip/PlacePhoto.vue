@@ -7,9 +7,16 @@ const props = defineProps<{
 
 const url = computed(() => props.place.images[0]?.url)
 
+// The img is only rendered once the page is in the browser. One in the server HTML can fail before Vue
+// attaches @error, and the failure is then never seen, which would leave a broken image.
+const mounted = ref(false)
+onMounted(() => {
+  mounted.value = true
+})
+
 // An image file can be missing from the API's storage, so a failed load is remembered until the URL changes.
 const failedUrl = ref<string>()
-const showPhoto = computed(() => !!url.value && failedUrl.value !== url.value)
+const showPhoto = computed(() => mounted.value && !!url.value && failedUrl.value !== url.value)
 </script>
 
 <template>

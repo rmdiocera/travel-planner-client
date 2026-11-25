@@ -22,10 +22,13 @@ const adding = ref(new Set<string>())
 const added = ref(new Set<string>())
 const addedNames = ref<string[]>([])
 
-async function addPlace(place: SearchPlace) {
+async function addPlace(place: SearchPlace, event: Event) {
   if (adding.value.has(place.id) || added.value.has(place.id)) {
     return
   }
+
+  // A browser moves focus off a button that becomes disabled while it loads, so it is given back afterwards.
+  const button = event.currentTarget as HTMLElement | null
 
   adding.value = new Set(adding.value).add(place.id)
   const succeeded = await props.add(place)
@@ -38,6 +41,9 @@ async function addPlace(place: SearchPlace) {
     addedNames.value = [...addedNames.value, place.name]
     emit('added', place)
   }
+
+  await nextTick()
+  button?.focus()
 }
 
 const showNoMatch = computed(() => !pending.value && !!searchedTerm.value && !results.value.length && term.value.trim() === searchedTerm.value)
@@ -54,13 +60,19 @@ const showNoMatch = computed(() => !pending.value && !!searchedTerm.value && !re
       class="w-full"
       data-testid="place-search-input"
     />
-    <p
-      v-if="addedNames.length"
-      class="rounded-md bg-primary/10 px-3 py-2 text-sm text-primary"
-      data-testid="place-search-added"
+    <!-- The status region is on the page from the start: screen readers often skip one that appears with its text. -->
+    <div
+      role="status"
+      aria-live="polite"
     >
-      Added to {{ targetLabel }}: {{ addedNames.join(', ') }}
-    </p>
+      <p
+        v-if="addedNames.length"
+        class="rounded-md bg-primary/10 px-3 py-2 text-sm text-primary"
+        data-testid="place-search-added"
+      >
+        Added to {{ targetLabel }}: {{ addedNames.join(', ') }}
+      </p>
+    </div>
     <p
       v-if="!term.trim()"
       class="text-sm text-muted"
@@ -100,9 +112,10 @@ const showNoMatch = computed(() => !pending.value && !!searchedTerm.value && !re
           size="sm"
           variant="outline"
           :loading="adding.has(place.id)"
-          :disabled="added.has(place.id)"
+          :aria-disabled="added.has(place.id) ? 'true' : undefined"
+          :aria-label="`Add ${place.name}`"
           :data-testid="`add-result-${place.id}`"
-          @click="addPlace(place)"
+          @click="addPlace(place, $event)"
         />
       </li>
     </ul>

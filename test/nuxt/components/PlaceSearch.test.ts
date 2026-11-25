@@ -74,9 +74,42 @@ describe('TripPlaceSearch', () => {
     expect(add).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1' }))
     const button = wrapper.find('[data-testid="add-result-p1"]')
     expect(button.text()).toBe('Added')
-    expect(button.attributes()).toHaveProperty('disabled')
+    // aria-disabled, not disabled, so the button keeps keyboard focus.
+    expect(button.attributes('aria-disabled')).toBe('true')
+    expect(button.attributes()).not.toHaveProperty('disabled')
     expect(wrapper.find('[data-testid="place-search-added"]').text()).toBe('Added to day 2: Ameyoko Market')
     expect(wrapper.emitted('added')).toHaveLength(1)
+  })
+
+  it('names each Add button after its place, and announces what was added', async () => {
+    const wrapper = await mountSearch()
+    await search(wrapper, 'ame')
+
+    expect(wrapper.find('[data-testid="add-result-p1"]').attributes('aria-label')).toBe('Add Ameyoko Market')
+    expect(wrapper.find('[role="status"]').exists()).toBe(true)
+
+    await wrapper.find('[data-testid="add-result-p1"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[role="status"]').text()).toContain('Added to day 2: Ameyoko Market')
+  })
+
+  it('gives focus back to the button after adding', async () => {
+    const pending = deferred<boolean>()
+    add.mockReturnValue(pending.promise)
+    const wrapper = await mountSuspended(TripPlaceSearch, { props: { targetLabel: 'day 2', add }, attachTo: document.body })
+    await search(wrapper, 'ame')
+    const button = wrapper.find('[data-testid="add-result-p1"]')
+    ;(button.element as HTMLElement).focus()
+    await button.trigger('click')
+    // A browser moves focus off a button that is disabled while it loads.
+    document.body.focus()
+    expect(document.activeElement).not.toBe(button.element)
+
+    pending.resolve(true)
+    await flushPromises()
+
+    expect(document.activeElement).toBe(wrapper.find('[data-testid="add-result-p1"]').element)
+    wrapper.unmount()
   })
 
   it('disables Add while the place is being added', async () => {

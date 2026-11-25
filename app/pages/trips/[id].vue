@@ -5,6 +5,7 @@
         v-if="!isMobile"
         v-model:open="editOpen"
         title="Edit trip"
+        :dismissible="!isLoading"
       >
         <template #form>
           <ItineraryForm
@@ -39,6 +40,7 @@
         v-model:open="editOpen"
         side="bottom"
         title="Edit trip"
+        :dismissible="!isLoading"
       >
         <template #form>
           <ItineraryForm
@@ -57,6 +59,7 @@
               label="Cancel"
               color="neutral"
               variant="outline"
+              :disabled="isLoading"
               @click="editOpen = false"
             />
             <UButton
@@ -143,13 +146,13 @@
               label="Cancel"
               color="neutral"
               variant="outline"
-              :disabled="isLoading"
+              :disabled="isDeleting"
               @click="confirmOpen = false"
             />
             <UButton
               label="Delete"
               color="error"
-              :loading="isLoading"
+              :loading="isDeleting"
               data-testid="delete-trip-btn"
               @click="handleDelete"
             />
@@ -314,7 +317,15 @@ const client = useSanctumClient()
 // One flag for the edit dialog: only the modal (computer) or the sheet (phone) is rendered.
 const editOpen = ref(false)
 const confirmOpen = ref(false)
+// Saving Edit trip and deleting the trip each have their own flag, so one can't leave the other spinning.
 const isLoading = ref(false)
+const isDeleting = ref(false)
+// The form reports through emits, and Vue drops those from a form that has closed, so a flag left on is cleared here.
+watch(editOpen, (open) => {
+  if (!open) {
+    isLoading.value = false
+  }
+})
 
 const itineraryFormRef = useTemplateRef('itineraryForm')
 function triggerSubmit() {
@@ -333,7 +344,7 @@ async function handleDelete() {
     return
   }
 
-  isLoading.value = true
+  isDeleting.value = true
   try {
     await client<unknown>(`/api/v1/itineraries/${trip.value.id}`, { method: 'DELETE' })
     confirmOpen.value = false
@@ -345,7 +356,7 @@ async function handleDelete() {
     showToast('Something went wrong', 'i-lucide-circle-x', 'There was a problem with your request', 'error')
   }
   finally {
-    isLoading.value = false
+    isDeleting.value = false
   }
 }
 
