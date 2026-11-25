@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
+import TripDragGrip from '~/components/trip/DragGrip.vue'
 import TripPlaceDetails from '~/components/trip/PlaceDetails.vue'
 import TripPlacePhoto from '~/components/trip/PlacePhoto.vue'
 import { injectTripDialogs } from '~/composables/tripDialogs'
@@ -77,10 +78,15 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
 
 <template>
   <div
-    class="border-t border-default first:border-t-0"
+    class="group border-t border-default first:border-t-0"
+    data-list-item
     :data-testid="`list-place-${item.id}`"
   >
-    <div class="flex items-center gap-3 py-3">
+    <div
+      class="flex items-center gap-3 py-3"
+      data-item-handle
+    >
+      <TripDragGrip />
       <p
         v-if="!place"
         class="flex-1 text-sm text-muted"

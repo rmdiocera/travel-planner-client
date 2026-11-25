@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
+import TripDragGrip from '~/components/trip/DragGrip.vue'
 import TripNoteEditor from '~/components/trip/NoteEditor.vue'
 import { injectConfirmDelete } from '~/composables/tripDialogs'
 import { injectTripLists } from '~/composables/useTripLists'
@@ -66,7 +67,8 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [
 
 <template>
   <div
-    class="border-t border-default first:border-t-0"
+    class="group border-t border-default first:border-t-0"
+    data-list-item
     :data-testid="`note-${item.id}`"
   >
     <TripNoteEditor
@@ -80,7 +82,9 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [
     <div
       v-else
       class="flex items-start gap-2 py-3"
+      data-item-handle
     >
+      <TripDragGrip />
       <UIcon
         name="i-lucide-file-text"
         class="mt-0.5 shrink-0 text-muted"

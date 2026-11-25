@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 import TripChecklistEntryRow from '~/components/trip/ChecklistEntryRow.vue'
+import TripDragGrip from '~/components/trip/DragGrip.vue'
 import { injectConfirmDelete } from '~/composables/tripDialogs'
+import { useDragReorder } from '~/composables/useDragReorder'
 import { injectTripLists } from '~/composables/useTripLists'
 import type { ItineraryList, ListItem } from '~/types/list'
 import { checklistDeleteText } from '~/utils/trip/deleteText'
@@ -80,6 +82,10 @@ async function addEntry() {
   }
 }
 
+// Dragging checklist items by their row, within this checklist.
+const entriesEl = useTemplateRef<HTMLElement>('entriesEl')
+useDragReorder(entriesEl, () => props.item.checklist_items.map(entry => entry.id), ids => void lists.reorderEntries(props.list, props.item, ids), { draggable: '[data-entry]', handle: '[data-entry-handle]' })
+
 const menuItems = computed<DropdownMenuItem[][]>(() => [
   [
     {
@@ -115,10 +121,15 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [
 
 <template>
   <div
-    class="border-t border-default py-3 first:border-t-0"
+    class="group border-t border-default py-3 first:border-t-0"
+    data-list-item
     :data-testid="`checklist-${item.id}`"
   >
-    <div class="flex items-center gap-2">
+    <div
+      class="flex items-center gap-2"
+      data-item-handle
+    >
+      <TripDragGrip />
       <UIcon
         name="i-lucide-list-checks"
         class="shrink-0 text-muted"
@@ -159,15 +170,17 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [
       </UDropdownMenu>
     </div>
     <div class="mt-1 flex flex-col pl-6">
-      <TripChecklistEntryRow
-        v-for="(entry, index) in item.checklist_items"
-        :key="entry.id"
-        :list="list"
-        :item="item"
-        :entry="entry"
-        :is-first="index === 0"
-        :is-last="index === item.checklist_items.length - 1"
-      />
+      <div ref="entriesEl">
+        <TripChecklistEntryRow
+          v-for="(entry, index) in item.checklist_items"
+          :key="entry.id"
+          :list="list"
+          :item="item"
+          :entry="entry"
+          :is-first="index === 0"
+          :is-last="index === item.checklist_items.length - 1"
+        />
+      </div>
       <UInput
         v-if="adding"
         ref="adder"

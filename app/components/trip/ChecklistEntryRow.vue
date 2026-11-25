@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import TripDragGrip from '~/components/trip/DragGrip.vue'
 import { injectTripLists } from '~/composables/useTripLists'
 import type { ChecklistEntry, ItineraryList, ListItem } from '~/types/list'
 
@@ -52,9 +53,12 @@ async function remove() {
 
 <template>
   <div
-    class="flex items-center gap-2 py-1"
+    class="group flex items-center gap-2 py-1"
+    data-entry
+    data-entry-handle
     :data-testid="`entry-${entry.id}`"
   >
+    <TripDragGrip />
     <UCheckbox
       :model-value="!!entry.is_checked"
       :aria-label="`${entry.label}, ticked`"

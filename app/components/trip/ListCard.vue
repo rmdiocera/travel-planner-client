@@ -2,11 +2,13 @@
 import type { DropdownMenuItem } from '@nuxt/ui'
 import TripChecklistDraft from '~/components/trip/ChecklistDraft.vue'
 import TripChecklistItem from '~/components/trip/ChecklistItem.vue'
+import TripDragGrip from '~/components/trip/DragGrip.vue'
 import TripListNameEditor from '~/components/trip/ListNameEditor.vue'
 import TripListPlaceRow from '~/components/trip/ListPlaceRow.vue'
 import TripNoteEditor from '~/components/trip/NoteEditor.vue'
 import TripNoteItem from '~/components/trip/NoteItem.vue'
 import { injectConfirmDelete, injectTripDialogs } from '~/composables/tripDialogs'
+import { useDragReorder } from '~/composables/useDragReorder'
 import { injectTripLists } from '~/composables/useTripLists'
 import type { ItineraryList, ListItem } from '~/types/list'
 import { listDeleteText } from '~/utils/trip/deleteText'
@@ -92,6 +94,10 @@ function checklistCreated(item: ListItem) {
   justCreatedId.value = item.id
 }
 
+// Dragging items by their row, within this list. An item can't be dropped into another list.
+const itemsEl = useTemplateRef<HTMLElement>('itemsEl')
+useDragReorder(itemsEl, () => props.list.items.map(item => item.id), ids => void lists.reorderItems(props.list, ids), { draggable: '[data-list-item]', handle: '[data-item-handle]' })
+
 const menuItems = computed<DropdownMenuItem[][]>(() => [
   [
     { label: 'Rename', icon: 'i-lucide-pencil', onSelect: startRename },
@@ -120,7 +126,7 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [
 
 <template>
   <section
-    class="rounded-md border border-default p-4"
+    class="group rounded-md border border-default p-4"
     data-testid="list-card"
   >
     <header class="flex items-center justify-between gap-2">
@@ -134,9 +140,15 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [
         @cancel="renaming = false"
       />
       <template v-else>
-        <h3 class="min-w-0 flex-1 truncate font-semibold">
-          {{ list.name }}
-        </h3>
+        <div
+          class="flex min-w-0 flex-1 items-center gap-2"
+          data-list-handle
+        >
+          <TripDragGrip />
+          <h3 class="min-w-0 flex-1 truncate font-semibold">
+            {{ list.name }}
+          </h3>
+        </div>
         <UDropdownMenu
           :items="menuItems"
           :content="{ align: 'end', sideOffset: 4 }"
@@ -153,6 +165,7 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [
       </template>
     </header>
     <div
+      ref="itemsEl"
       class="flex flex-col"
       data-testid="list-items"
     >

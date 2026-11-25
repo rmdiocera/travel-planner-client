@@ -5,6 +5,7 @@ import TripListsSkeleton from '~/components/trip/ListsSkeleton.vue'
 import ConfirmModal from '~/components/ui/ConfirmModal.vue'
 import EmptyState from '~/components/ui/EmptyState.vue'
 import { confirmDeleteKey } from '~/composables/tripDialogs'
+import { useDragReorder } from '~/composables/useDragReorder'
 import type { ConfirmDeleteRequest } from '~/composables/tripDialogs'
 import { injectTripLists } from '~/composables/useTripLists'
 
@@ -53,6 +54,10 @@ async function confirmDelete() {
   confirmOpen.value = false
 }
 
+// Dragging a list by its name, within the lists column.
+const listsEl = useTemplateRef<HTMLElement>('listsEl')
+useDragReorder(listsEl, () => lists.value.map(list => list.id), ids => void tripLists.reorderLists(ids), { draggable: '[data-testid="list-card"]', handle: '[data-list-handle]' })
+
 // One list place is open at a time in the lists column.
 const openItemId = ref<string | null>(null)
 function toggleItem(id: string) {
@@ -97,15 +102,20 @@ function toggleItem(id: string) {
         </template>
       </EmptyState>
       <template v-else>
-        <TripListCard
-          v-for="(list, index) in lists"
-          :key="list.id"
-          :list="list"
-          :is-first="index === 0"
-          :is-last="index === lists.length - 1"
-          :open-item-id="openItemId"
-          @toggle-item="toggleItem"
-        />
+        <div
+          ref="listsEl"
+          class="flex flex-col gap-4"
+        >
+          <TripListCard
+            v-for="(list, index) in lists"
+            :key="list.id"
+            :list="list"
+            :is-first="index === 0"
+            :is-last="index === lists.length - 1"
+            :open-item-id="openItemId"
+            @toggle-item="toggleItem"
+          />
+        </div>
         <div
           v-if="creating"
           class="rounded-md border border-default p-4"
