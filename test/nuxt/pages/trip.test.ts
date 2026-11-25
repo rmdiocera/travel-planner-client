@@ -381,6 +381,56 @@ describe('Trip page', () => {
       expect(scrollIntoView).not.toHaveBeenCalled()
     })
 
+    describe('moving a stop to another day', () => {
+      it('moves it, keeping its times', async () => {
+        spotsRef.value = { data: { '2027-03-13': [stop1, stop2] } }
+        clientMock.mockResolvedValue({ data: stop1 })
+        const { wrapper, bodyWrapper } = await mountTripPage()
+
+        await selectMenuItem(wrapper, 'stop-menu-btn-s1', 'Move to another day')
+        expect(bodyWrapper.text()).toContain('Move to another day')
+        await bodyWrapper.find('[data-testid="day-option-2027-03-15"]').trigger('click')
+        await bodyWrapper.find('[data-testid="day-picker-confirm-btn"]').trigger('click')
+        await flushPromises()
+
+        expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/t1/spots/s1', {
+          method: 'PATCH',
+          body: { visit_date: '2027-03-15', start_time: '08:00', end_time: '10:00' },
+        })
+        expect(spotsRefreshMock).toHaveBeenCalled()
+      })
+
+      it('turns the own day of the stop off, and the confirm button off until a day is picked', async () => {
+        spotsRef.value = { data: { '2027-03-13': [stop1] } }
+        const { wrapper, bodyWrapper } = await mountTripPage()
+        await selectMenuItem(wrapper, 'stop-menu-btn-s1', 'Move to another day')
+
+        expect(bodyWrapper.find('[data-testid="day-option-2027-03-13"]').attributes()).toHaveProperty('disabled')
+        expect(bodyWrapper.find('[data-testid="day-picker-confirm-btn"]').attributes()).toHaveProperty('disabled')
+        await bodyWrapper.find('[data-testid="day-option-2027-03-14"]').trigger('click')
+        expect(bodyWrapper.find('[data-testid="day-picker-confirm-btn"]').text()).toBe('Move to day 3')
+      })
+
+      it('offers Move to another day for a stop outside the trip dates', async () => {
+        spotsRef.value = { data: { '2027-03-20': [makeSpot('s9', '2027-03-20')] } }
+        const { wrapper } = await mountTripPage()
+
+        expect(wrapper.find('[data-testid="outside-section"]').text()).toContain('Move these to a day of the trip, or remove them.')
+        const labels = menuItems(wrapper, 'stop-menu-btn-s9').map(item => item.label)
+        expect(labels).toContain('Move to another day')
+        expect(labels).toContain('Remove from trip')
+      })
+
+      it('turns Move to another day off when the trip has no dates', async () => {
+        tripRef.value = { data: { ...japanTrip, start_date: null, end_date: null } }
+        spotsRef.value = { data: { '2027-03-13': [stop1] } }
+        const { wrapper } = await mountTripPage()
+
+        const move = menuItems(wrapper, 'stop-menu-btn-s1').find(item => item.label === 'Move to another day')
+        expect(move?.disabled).toBe(true)
+      })
+    })
+
     it('opening one stop closes the other', async () => {
       spotsRef.value = { data: { '2027-03-13': [stop1, stop2] } }
       const { wrapper } = await mountTripPage()

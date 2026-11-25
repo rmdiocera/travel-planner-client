@@ -3,6 +3,7 @@ import type { DropdownMenuItem } from '@nuxt/ui'
 import TripPlaceDetails from '~/components/trip/PlaceDetails.vue'
 import TripPlacePhoto from '~/components/trip/PlacePhoto.vue'
 import TripTimesEditor from '~/components/trip/TimesEditor.vue'
+import { injectTripDialogs } from '~/composables/tripDialogs'
 import { injectTripDays } from '~/composables/useTripDays'
 import type { Spot } from '~/types/spot'
 import { formatDayDate, visitDate } from '~/utils/trip/days'
@@ -24,6 +25,7 @@ defineEmits<{
 }>()
 
 const days = injectTripDays()
+const dialogs = injectTripDialogs()
 
 // Edit times shows Arrive and Leave in the opened row, in place of its buttons.
 const editingTimes = ref(false)
@@ -34,6 +36,13 @@ watch(() => props.open, (open) => {
 })
 
 const menuItems = computed<DropdownMenuItem[][]>(() => [[
+  {
+    label: 'Move to another day',
+    icon: 'i-lucide-calendar-days',
+    // A trip without dates has no days to move to.
+    disabled: days.days.value.length === 0,
+    onSelect: () => dialogs.openDayPicker({ mode: 'move', stop: props.stop }),
+  },
   {
     label: props.variant === 'day' ? 'Remove from day' : 'Remove from trip',
     icon: 'i-lucide-calendar-minus',

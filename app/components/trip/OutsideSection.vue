@@ -27,7 +27,7 @@ defineEmits<{
       <span class="font-normal text-muted">{{ stops.length }}</span>
     </h2>
     <p class="py-1 text-sm text-muted">
-      Change the trip's dates to bring them back, or remove them.
+      Move these to a day of the trip, or remove them.
     </p>
     <TripStopRow
       v-for="(stop, index) in stops"

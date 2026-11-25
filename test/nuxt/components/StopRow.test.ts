@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mountSuspended } from '@nuxt/test-utils/runtime'
 import TripStopRow from '~/components/trip/StopRow.vue'
+import { tripDialogsKey } from '~/composables/tripDialogs'
 import { tripDaysKey } from '~/composables/useTripDays'
 import type { Spot } from '~/types/spot'
 import { mapsUrl } from '~/utils/trip/maps'
 import { makePlace, makeSpot } from '../../utils/tripFixtures'
 
 const fakeDays = {
+  days: ref([{ date: '2027-03-13', number: 2, stops: [], outOfOrder: false }]),
   setVisited: vi.fn(),
   removeStop: vi.fn(),
   isSaving: vi.fn(() => false),
@@ -25,7 +27,7 @@ const castle = makePlace({
 async function mountRow(stop: Spot, props: { open?: boolean } = {}) {
   return mountSuspended(TripStopRow, {
     props: { stop, variant: 'day', open: false, isFirst: true, isLast: true, ...props },
-    global: { provide: { [tripDaysKey as symbol]: fakeDays } },
+    global: { provide: { [tripDaysKey as symbol]: fakeDays, [tripDialogsKey as symbol]: { openDayPicker: vi.fn() } } },
   })
 }
 
