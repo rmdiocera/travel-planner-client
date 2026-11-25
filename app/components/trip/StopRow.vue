@@ -2,6 +2,7 @@
 import type { DropdownMenuItem } from '@nuxt/ui'
 import TripPlaceDetails from '~/components/trip/PlaceDetails.vue'
 import TripPlacePhoto from '~/components/trip/PlacePhoto.vue'
+import TripTimesEditor from '~/components/trip/TimesEditor.vue'
 import { injectTripDays } from '~/composables/useTripDays'
 import type { Spot } from '~/types/spot'
 import { formatDayDate, visitDate } from '~/utils/trip/days'
@@ -23,6 +24,14 @@ defineEmits<{
 }>()
 
 const days = injectTripDays()
+
+// Edit times shows Arrive and Leave in the opened row, in place of its buttons.
+const editingTimes = ref(false)
+watch(() => props.open, (open) => {
+  if (!open) {
+    editingTimes.value = false
+  }
+})
 
 const menuItems = computed<DropdownMenuItem[][]>(() => [[
   {
@@ -110,7 +119,14 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [[
       v-if="open"
       :place="stop.place"
     >
+      <TripTimesEditor
+        v-if="editingTimes"
+        :stop="stop"
+        class="w-full"
+        @close="editingTimes = false"
+      />
       <UButton
+        v-if="!editingTimes"
         :label="stop.marked_visited ? 'Mark as not visited' : 'Mark as visited'"
         icon="i-lucide-check"
         variant="outline"
@@ -120,12 +136,14 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [[
         @click="days.setVisited(stop, !stop.marked_visited)"
       />
       <UButton
+        v-if="!editingTimes"
         label="Edit times"
         icon="i-lucide-clock"
         variant="outline"
         color="neutral"
         size="sm"
         data-testid="stop-edit-times-btn"
+        @click="editingTimes = true"
       />
     </TripPlaceDetails>
   </div>
