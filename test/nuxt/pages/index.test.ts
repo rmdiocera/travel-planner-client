@@ -21,13 +21,23 @@ const { clientMock, lazyFetchMock, toastAddMock } = vi.hoisted(() => ({
 
 const upcomingItinerary = { id: 'i2', name: 'Trip to Kyoto', start_date: '2027-01-15', end_date: '2027-01-20' }
 let upcomingItineraries: Record<string, string | null>[] = []
+let unscheduledItineraries: Record<string, string | null>[] = []
+let pastItineraries: Record<string, string | null>[] = []
+let sendsUnscheduledGroup = true
 
 mockNuxtImport('useLazySanctumFetch', () => {
   return (url: string, options?: Record<string, unknown>) => {
     lazyFetchMock(url, options)
     if (url === '/api/v1/itineraries') {
       return {
-        data: ref({ data: { past: [], ongoing: [], upcoming: [...upcomingItineraries] } }),
+        data: ref({
+          data: {
+            past: [...pastItineraries],
+            ongoing: [],
+            upcoming: [...upcomingItineraries],
+            ...(sendsUnscheduledGroup ? { unscheduled: [...unscheduledItineraries] } : {}),
+          },
+        }),
         pending: ref(false),
         error: ref(null),
         refresh: vi.fn(),
@@ -599,6 +609,79 @@ describe('Index page', () => {
         description: 'There was a problem with your request',
         color: 'error',
       })
+    })
+  })
+
+  describe('Unscheduled trips', () => {
+    const undatedItinerary = { id: 'i9', name: 'Iceland someday', start_date: null, end_date: null }
+    const pastItinerary = { id: 'i1', name: 'Trip to Tokyo', start_date: '2025-07-21', end_date: '2025-07-28' }
+
+    afterEach(() => {
+      upcomingItineraries = []
+      unscheduledItineraries = []
+      pastItineraries = []
+      sendsUnscheduledGroup = true
+    })
+
+    function groupText(wrapper: VueWrapper, heading: string) {
+      return wrapper.findAll('h2.itinerary-heading')
+        .find(h2 => h2.text() === heading)?.element.parentElement?.textContent ?? ''
+    }
+
+    it('shows trips without dates under Unscheduled, between Upcoming and Past', async () => {
+      upcomingItineraries = [upcomingItinerary]
+      unscheduledItineraries = [undatedItinerary]
+      pastItineraries = [pastItinerary]
+      const { wrapper } = await mountIndexPage({ openCreateModal: false })
+
+      expect(wrapper.findAll('h2.itinerary-heading').map(h2 => h2.text())).toEqual(['Upcoming', 'Unscheduled', 'Past'])
+      expect(groupText(wrapper, 'Unscheduled')).toContain('Iceland someday')
+    })
+
+    it('puts a new trip without dates under Unscheduled', async () => {
+      upcomingItineraries = [upcomingItinerary]
+      clientMock.mockResolvedValue({ data: undatedItinerary })
+      const { wrapper, bodyWrapper } = await mountIndexPage()
+      await bodyWrapper.find('input[name="name"]').setValue('Iceland someday')
+      await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
+      await flushPromises()
+
+      expect(groupText(wrapper, 'Unscheduled')).toContain('Iceland someday')
+      expect(groupText(wrapper, 'Upcoming')).not.toContain('Iceland someday')
+    })
+
+    it('moves an unscheduled trip to Upcoming when it gets dates', async () => {
+      unscheduledItineraries = [undatedItinerary]
+      clientMock.mockResolvedValue({ data: { ...undatedItinerary, start_date: '2027-01-15', end_date: '2027-01-20' } })
+      const { wrapper, bodyWrapper } = await mountIndexPage({ openCreateModal: false })
+
+      // Grid's menu is a teleported Nuxt UI dropdown, so emit what its Edit item emits.
+      const grid = wrapper.findComponent(ItineraryGrid)
+      grid.vm.$emit('isModalOpen', true)
+      grid.vm.$emit('isEditing', true)
+      grid.vm.$emit('selectedItinerary', undatedItinerary)
+      await nextTick()
+      await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
+      await flushPromises()
+
+      expect(wrapper.findAll('h2.itinerary-heading').map(h2 => h2.text())).toEqual(['Upcoming'])
+      expect(groupText(wrapper, 'Upcoming')).toContain('Iceland someday')
+    })
+
+    it('works with a backend that has no unscheduled group yet', async () => {
+      sendsUnscheduledGroup = false
+      upcomingItineraries = [upcomingItinerary]
+      const { wrapper } = await mountIndexPage({ openCreateModal: false })
+
+      expect(wrapper.findAll('h2.itinerary-heading').map(h2 => h2.text())).toEqual(['Upcoming'])
+    })
+
+    it('shows No trips yet only when every group is empty', async () => {
+      unscheduledItineraries = [undatedItinerary]
+      const { wrapper } = await mountIndexPage({ openCreateModal: false })
+
+      expect(wrapper.text()).not.toContain('No trips yet')
+      expect(wrapper.text()).toContain('Iceland someday')
     })
   })
 

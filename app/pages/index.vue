@@ -204,6 +204,22 @@
                 />
               </div>
               <div
+                v-if="itineraries?.data.unscheduled?.length"
+                class="flex flex-col gap-2"
+              >
+                <h2 class="itinerary-heading">
+                  Unscheduled
+                </h2>
+                <Grid
+                  :itineraries="itineraries.data.unscheduled"
+                  @is-editing="isEditing = $event"
+                  @is-modal-open="modalOpen = $event"
+                  @is-slideover-open="slideoverOpen = $event"
+                  @is-confirm-modal-open="confirmModalOpen = $event"
+                  @selected-itinerary="itineraryDisplayed = $event; itineraryBucket='unscheduled'"
+                />
+              </div>
+              <div
                 v-if="itineraries?.data.past.length"
                 class="flex flex-col gap-2"
               >
@@ -304,7 +320,7 @@ const isMobile = computed(() => width.value < 768)
 
 const { showToast } = useAppToast()
 
-const itineraryBucket = ref<'ongoing' | 'upcoming'>()
+const itineraryBucket = ref<'ongoing' | 'upcoming' | 'unscheduled'>()
 
 const { data: itineraries, pending: itinerariesPending, error: itinerariesError, refresh } = useLazySanctumFetch<ItinerariesGroupedResponse>('/api/v1/itineraries', {
   params: {
@@ -324,7 +340,7 @@ const itineraryDisplayed = ref<Itinerary | undefined>(undefined)
 
 const hasItineraries = computed(() => {
   const data = itineraries.value?.data
-  return !!(data?.ongoing.length || data?.past.length || data?.upcoming.length)
+  return !!(data?.ongoing.length || data?.past.length || data?.upcoming.length || data?.unscheduled?.length)
 })
 
 watch(modalOpen, (isOpen) => {
@@ -345,12 +361,12 @@ watch(itineraryUpdated, (value) => {
 
   if (itineraries.value?.data) {
     if (itineraryBucket.value) {
-      const old_itinerary = itineraries.value.data[itineraryBucket.value].find(itinerary => itinerary.id === value.data.id)
+      const old_itinerary = itineraries.value.data[itineraryBucket.value]?.find(itinerary => itinerary.id === value.data.id)
       if (old_itinerary && (old_itinerary?.name !== value.data.name
         || old_itinerary?.start_date !== value.data.start_date
         || old_itinerary?.end_date !== value.data.end_date)) {
-        const index = itineraries.value.data[itineraryBucket.value].indexOf(old_itinerary)
-        itineraries.value.data[itineraryBucket.value].splice(index, 1)
+        const index = itineraries.value.data[itineraryBucket.value]!.indexOf(old_itinerary)
+        itineraries.value.data[itineraryBucket.value]!.splice(index, 1)
         isDeleted.value = true
       }
     }
@@ -380,11 +396,12 @@ async function handleDelete(deletedItinerary: Itinerary | undefined) {
 
     if (itineraries.value?.data) {
       if (itineraryBucket.value) {
-        const index = itineraries.value.data[itineraryBucket.value]
+        const bucket = itineraries.value.data[itineraryBucket.value] ?? []
+        const index = bucket
           .map(itinerary => itinerary.id)
           .indexOf(deletedItinerary.id)
 
-        itineraries.value.data[itineraryBucket.value].splice(index, 1)
+        bucket.splice(index, 1)
         reorderItineraries()
       }
     }
@@ -402,7 +419,12 @@ function addNewItinerary(itinerary: ItineraryResponse) {
   reorderItineraries()
 
   if (itineraries.value?.data) {
-    if (toCalendarDate(new Date(itinerary.data.start_date)) > toCalendarDate(new Date())) {
+    const { start_date, end_date } = itinerary.data
+    if (!start_date || !end_date) {
+      // reorderItineraries() above made sure the group exists.
+      itineraries.value.data.unscheduled?.push(itinerary.data)
+    }
+    else if (toCalendarDate(new Date(start_date)) > toCalendarDate(new Date())) {
       itineraries.value.data.upcoming.push(itinerary.data)
     }
     else {
@@ -417,6 +439,7 @@ function reorderItineraries() {
       'data': {
         'upcoming': itineraries.value.data.upcoming ? [...itineraries.value.data.upcoming] : [],
         'ongoing': itineraries.value.data.ongoing ? [...itineraries.value.data.ongoing] : [],
+        'unscheduled': itineraries.value.data.unscheduled ? [...itineraries.value.data.unscheduled] : [],
         'past': itineraries.value.data.past ? [...itineraries.value.data.past] : [],
       },
     }
