@@ -11,6 +11,7 @@
           <ItineraryForm
             ref="itineraryForm"
             :selected-itinerary="trip ?? undefined"
+            :stop-dates="stopDates"
             @loading="isLoading = $event"
             @is-modal-open="editOpen = $event"
             @itinerary-updated="mergeUpdatedTrip($event)"
@@ -46,6 +47,7 @@
           <ItineraryForm
             ref="itineraryForm"
             :selected-itinerary="trip ?? undefined"
+            :stop-dates="stopDates"
             @loading="isLoading = $event"
             @is-modal-open="editOpen = $event"
             @itinerary-updated="mergeUpdatedTrip($event)"
@@ -502,6 +504,9 @@ const openStopId = ref<string | null>(null)
 function toggleStop(id: string) {
   openStopId.value = openStopId.value === id ? null : id
 }
+
+// Every stop's date, for Edit trip's warning about stops that new dates would leave outside the trip.
+const stopDates = computed(() => [...tripDays.value.flatMap(day => day.stops), ...outside.value].map(visitDate))
 
 const hasDates = computed(() => !!trip.value?.start_date && !!trip.value?.end_date)
 

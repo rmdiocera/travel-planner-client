@@ -3,9 +3,13 @@ import type { CalendarDate } from '@internationalized/date'
 import { getLocalTimeZone, DateFormatter, parseDate, today } from '@internationalized/date'
 import type { FormError } from '@nuxt/ui'
 import type { Itinerary, ItineraryResponse } from '~/types/itinerary'
+import { countOutside } from '~/utils/trip/days'
 
 const props = defineProps<{
   selectedItinerary?: Itinerary
+  // The dates ("YYYY-MM-DD") of the trip's stops. Only the trip page knows them, so only it can warn
+  // when new dates would leave stops outside the trip.
+  stopDates?: string[]
 }>()
 const isEditing = computed(() => !!props.selectedItinerary)
 
@@ -36,6 +40,19 @@ const dateToday = today(getLocalTimeZone())
 
 // An end date can't be before the start, nor before today: an edit that moved a trip's end into the past
 // would make it a past trip, and Edit trip is off for those, so it couldn't be undone.
+// Stops aren't touched when a trip's dates change: they wait under "Outside the trip dates". Say so first.
+const outsideCount = computed(() => {
+  const changed = form.value.start_date !== (props.selectedItinerary?.start_date ?? '')
+    || form.value.end_date !== (props.selectedItinerary?.end_date ?? '')
+  return changed && props.stopDates
+    ? countOutside(props.stopDates, form.value.start_date || null, form.value.end_date || null)
+    : 0
+})
+
+const outsideWarning = computed(() => outsideCount.value === 1
+  ? `1 place is on a day outside these dates. It'll be kept under "Outside the trip dates" so you can move it.`
+  : `${outsideCount.value} places are on days outside these dates. They'll be kept under "Outside the trip dates" so you can move them.`)
+
 const endMinValue = computed(() => startDate.value && startDate.value.compare(dateToday) > 0 ? startDate.value : dateToday)
 
 const df = new DateFormatter('en-US', {
@@ -243,6 +260,13 @@ async function handleSubmit() {
             </UPopover>
           </UFormField>
         </div>
+        <p
+          v-if="outsideCount"
+          class="text-sm text-warning"
+          data-testid="outside-dates-warning"
+        >
+          {{ outsideWarning }}
+        </p>
         <div v-if="startDate || endDate">
           <UButton
             label="Clear dates"

@@ -205,6 +205,49 @@ describe('Trip page', () => {
       expect(bodyWrapper.find('[data-testid="delete-trip-btn"]').attributes()).not.toHaveProperty('disabled')
     })
 
+    describe('the warning about places left outside the new dates', () => {
+      async function openEditAndPickEnd(date: string) {
+        const mounted = await mountTripPage()
+        await selectMenuItem(mounted.wrapper, 'trip-menu-btn', 'Edit trip')
+        await mounted.bodyWrapper.find('button[data-testid="select-end-date-btn"]').trigger('click')
+        const days = mounted.bodyWrapper.findAll(`[data-testid="end-date-cal"] div[data-value="${date}"]`)
+        await days.at(-1)!.trigger('click')
+        await flushPromises()
+        return mounted
+      }
+
+      it('warns when the new dates would leave places out', async () => {
+        spotsRef.value = { data: { '2027-03-17': [makeSpot('s7', '2027-03-17')], '2027-03-18': [makeSpot('s8', '2027-03-18')] } }
+        const { bodyWrapper } = await openEditAndPickEnd('2027-03-16')
+
+        expect(bodyWrapper.find('[data-testid="outside-dates-warning"]').text())
+          .toBe('2 places are on days outside these dates. They\'ll be kept under "Outside the trip dates" so you can move them.')
+      })
+
+      it('uses the singular for one place', async () => {
+        spotsRef.value = { data: { '2027-03-18': [makeSpot('s8', '2027-03-18')] } }
+        const { bodyWrapper } = await openEditAndPickEnd('2027-03-16')
+
+        expect(bodyWrapper.find('[data-testid="outside-dates-warning"]').text())
+          .toBe('1 place is on a day outside these dates. It\'ll be kept under "Outside the trip dates" so you can move it.')
+      })
+
+      it('does not warn while the dates are unchanged', async () => {
+        spotsRef.value = { data: { '2027-03-18': [makeSpot('s8', '2027-03-18')] } }
+        const { wrapper, bodyWrapper } = await mountTripPage()
+        await selectMenuItem(wrapper, 'trip-menu-btn', 'Edit trip')
+
+        expect(bodyWrapper.find('[data-testid="outside-dates-warning"]').exists()).toBe(false)
+      })
+
+      it('does not warn when every stop is still inside the new dates', async () => {
+        spotsRef.value = { data: { '2027-03-13': [makeSpot('s1', '2027-03-13')] } }
+        const { bodyWrapper } = await openEditAndPickEnd('2027-03-16')
+
+        expect(bodyWrapper.find('[data-testid="outside-dates-warning"]').exists()).toBe(false)
+      })
+    })
+
     it('opens Edit trip from Add dates', async () => {
       tripRef.value = { data: { ...japanTrip, start_date: null, end_date: null } }
       const { wrapper, bodyWrapper } = await mountTripPage()
