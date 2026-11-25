@@ -669,6 +669,30 @@ describe('Trip page', () => {
       expect(row.find('[data-testid="stop-edit-times-btn"]').exists()).toBe(false)
     })
 
+    it('adds a checklist from + Checklist, and opens its next box', async () => {
+      listsRef.value = { data: [list([])] }
+      clientMock
+        .mockResolvedValueOnce({ data: { id: 'c9', itinerary_lists_id: 'l1', type: 'checklist', title: null, sort_order: 1 } })
+        .mockResolvedValueOnce({ data: { id: 'c9', itinerary_lists_id: 'l1', type: 'checklist', title: 'Packing', sort_order: 1 } })
+        .mockResolvedValueOnce({ data: { id: 'e1', itinerary_list_item_id: 'c9', label: 'Passport', is_checked: null, sort_order: 1 } })
+      const { wrapper } = await mountTripPage()
+      await wrapper.find('[data-testid="list-add-checklist-btn"]').trigger('click')
+      await wrapper.find('input[data-testid="checklist-title-input"]').setValue('Packing')
+      const input = wrapper.find('input[data-testid="checklist-item-input"]')
+      await input.setValue('Passport')
+      await input.trigger('keydown', { key: 'Enter' })
+      await flushPromises()
+
+      expect(clientMock).toHaveBeenNthCalledWith(1, '/api/v1/itineraries/t1/lists/l1/items', { method: 'POST', body: { type: 'checklist' } })
+      expect(clientMock).toHaveBeenNthCalledWith(2, '/api/v1/itineraries/t1/lists/l1/items/c9', { method: 'PATCH', body: { type: 'checklist', title: 'Packing' } })
+      expect(clientMock).toHaveBeenNthCalledWith(3, '/api/v1/itineraries/t1/lists/l1/items/c9/checklist', { method: 'POST', body: { label: 'Passport' } })
+      const checklist = wrapper.find('[data-testid="checklist-c9"]')
+      expect(checklist.text()).toContain('Packing')
+      expect(checklist.text()).toContain('Passport')
+      // The draft is gone and the checklist's own box is open for the next item.
+      expect(wrapper.findAll('input[data-testid="checklist-item-input"]')).toHaveLength(1)
+    })
+
     describe('notes', () => {
       beforeEach(() => {
         listsRef.value = { data: [list([noteItem])] }

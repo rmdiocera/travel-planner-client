@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
+import TripChecklistDraft from '~/components/trip/ChecklistDraft.vue'
+import TripChecklistItem from '~/components/trip/ChecklistItem.vue'
 import TripListNameEditor from '~/components/trip/ListNameEditor.vue'
 import TripListPlaceRow from '~/components/trip/ListPlaceRow.vue'
 import TripNoteEditor from '~/components/trip/NoteEditor.vue'
 import TripNoteItem from '~/components/trip/NoteItem.vue'
 import { injectConfirmDelete, injectTripDialogs } from '~/composables/tripDialogs'
 import { injectTripLists } from '~/composables/useTripLists'
-import type { ItineraryList } from '~/types/list'
+import type { ItineraryList, ListItem } from '~/types/list'
 import { listDeleteText } from '~/utils/trip/deleteText'
 
 const props = defineProps<{
@@ -79,6 +81,15 @@ async function saveNote(content: string) {
 async function cancelNote() {
   addingNote.value = false
   await lists.discardNoteDraft(props.list)
+}
+
+// "+ Checklist": a draft with a title and a first item. Once the checklist exists it takes over, with its own add box open.
+const addingChecklist = ref(false)
+const justCreatedId = ref<string | null>(null)
+
+function checklistCreated(item: ListItem) {
+  addingChecklist.value = false
+  justCreatedId.value = item.id
 }
 
 const menuItems = computed<DropdownMenuItem[][]>(() => [
@@ -158,6 +169,14 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [
           :open="openItemId === item.id"
           @toggle="$emit('toggleItem', item.id)"
         />
+        <TripChecklistItem
+          v-else-if="item.type === 'checklist'"
+          :list="list"
+          :item="item"
+          :is-first="index === 0"
+          :is-last="index === list.items.length - 1"
+          :auto-add="justCreatedId === item.id"
+        />
         <TripNoteItem
           v-else-if="item.type === 'note'"
           :list="list"
@@ -166,6 +185,12 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [
           :is-last="index === list.items.length - 1"
         />
       </template>
+      <TripChecklistDraft
+        v-if="addingChecklist"
+        :list="list"
+        @created="checklistCreated"
+        @cancel="addingChecklist = false"
+      />
       <TripNoteEditor
         v-if="addingNote"
         :error="noteError"
@@ -197,6 +222,7 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [
         variant="outline"
         size="xs"
         data-testid="list-add-checklist-btn"
+        @click="addingChecklist = true"
       />
     </div>
   </section>
