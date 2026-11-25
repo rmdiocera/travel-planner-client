@@ -700,6 +700,29 @@ describe('Trip page', () => {
       expect(row.find('[data-testid="stop-edit-times-btn"]').exists()).toBe(false)
     })
 
+    it('shows a list place\'s details under its name until it is opened', async () => {
+      listsRef.value = { data: [list([placeItem])] }
+      const { wrapper } = await mountTripPage()
+      const row = wrapper.find('[data-testid="list-place-i1"]')
+
+      const preview = row.find('[data-testid="place-details-preview"]')
+      expect(preview.text()).toBe('An open-air market.')
+      expect(preview.classes()).toEqual(expect.arrayContaining(['hidden', 'md:line-clamp-2']))
+      expect(preview.attributes('aria-hidden')).toBe('true')
+
+      await wrapper.find('[data-testid="list-place-toggle-i1"]').trigger('click')
+
+      expect(row.find('[data-testid="place-details-preview"]').exists()).toBe(false)
+      expect(row.text().split('An open-air market.').length - 1).toBe(1)
+    })
+
+    it('shows no city on a list place', async () => {
+      listsRef.value = { data: [list([placeItem])] }
+      const { wrapper } = await mountTripPage()
+
+      expect(wrapper.find('[data-testid="list-place-i1"]').text()).not.toContain('Tokyo')
+    })
+
     it('adds a checklist from + Checklist, and opens its next box', async () => {
       listsRef.value = { data: [list([])] }
       clientMock

@@ -102,11 +102,17 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
           @click="$emit('toggle')"
         >
           <div class="min-w-0 flex-1">
-            <p class="truncate font-medium">
+            <p class="line-clamp-2 font-medium">
               {{ place.name }}
             </p>
-            <p class="truncate text-sm text-muted">
-              {{ place.city }}
+            <!-- aria-hidden: the preview sits inside the toggle button, so it would otherwise be read out with the button's name. -->
+            <p
+              v-if="!open && place.details?.trim()"
+              class="hidden text-sm text-muted md:line-clamp-2"
+              aria-hidden="true"
+              data-testid="place-details-preview"
+            >
+              {{ place.details }}
             </p>
           </div>
           <TripPlacePhoto :place="place" />
