@@ -4,9 +4,9 @@ import TripListNameEditor from '~/components/trip/ListNameEditor.vue'
 import TripListsSkeleton from '~/components/trip/ListsSkeleton.vue'
 import ConfirmModal from '~/components/ui/ConfirmModal.vue'
 import EmptyState from '~/components/ui/EmptyState.vue'
+import { confirmDeleteKey } from '~/composables/tripDialogs'
+import type { ConfirmDeleteRequest } from '~/composables/tripDialogs'
 import { injectTripLists } from '~/composables/useTripLists'
-import type { ItineraryList } from '~/types/list'
-import { listDeleteText } from '~/utils/trip/deleteText'
 
 const tripLists = injectTripLists()
 const { lists, pending, error, refresh } = tripLists
@@ -32,31 +32,31 @@ async function saveNew(name: string) {
   }
 }
 
-// Delete list asks first, and says what goes with the list.
-const deleting = ref<ItineraryList | null>(null)
+// Deleting a list, note or checklist asks first, in one confirmation. Components below ask for it with confirmDeleteKey.
+const request = ref<ConfirmDeleteRequest | null>(null)
 const confirmOpen = ref(false)
 const isDeleting = ref(false)
 
-function askToDelete(list: ItineraryList) {
-  deleting.value = list
+provide(confirmDeleteKey, (asked) => {
+  request.value = asked
   confirmOpen.value = true
-}
-
-const deleteText = computed(() => {
-  const items = deleting.value?.items ?? []
-  const count = (type: string) => items.filter(item => item.type === type).length
-  return listDeleteText(deleting.value?.name ?? '', { places: count('place'), checklists: count('checklist'), notes: count('note') })
 })
 
 async function confirmDelete() {
-  if (!deleting.value) {
+  if (!request.value) {
     return
   }
 
   isDeleting.value = true
-  await tripLists.deleteList(deleting.value)
+  await request.value.run()
   isDeleting.value = false
   confirmOpen.value = false
+}
+
+// One list place is open at a time in the lists column.
+const openItemId = ref<string | null>(null)
+function toggleItem(id: string) {
+  openItemId.value = openItemId.value === id ? null : id
 }
 </script>
 
@@ -103,7 +103,8 @@ async function confirmDelete() {
           :list="list"
           :is-first="index === 0"
           :is-last="index === lists.length - 1"
-          @delete="askToDelete"
+          :open-item-id="openItemId"
+          @toggle-item="toggleItem"
         />
         <div
           v-if="creating"
@@ -133,7 +134,7 @@ async function confirmDelete() {
     <ClientOnly>
       <ConfirmModal
         v-model:open="confirmOpen"
-        :title="deleteText.title"
+        :title="request?.title"
       >
         <template #description>
           <UAlert
@@ -141,7 +142,7 @@ async function confirmDelete() {
             variant="soft"
             icon="i-lucide-triangle-alert"
             :ui="{ root: 'items-center' }"
-            :title="deleteText.body"
+            :title="request?.body"
           />
         </template>
         <template #action>
@@ -157,7 +158,7 @@ async function confirmDelete() {
               label="Delete"
               color="error"
               :loading="isDeleting"
-              data-testid="delete-list-btn"
+              data-testid="confirm-delete-btn"
               @click="confirmDelete"
             />
           </div>

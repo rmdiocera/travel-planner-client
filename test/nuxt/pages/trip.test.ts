@@ -4,7 +4,7 @@ import { flushPromises } from '@vue/test-utils'
 import TripPlaceSearch from '~/components/trip/PlaceSearch.vue'
 import { mountTripPage } from '../../utils/mountTripPage'
 import { menuItems, selectMenuItem } from '../../utils/menu'
-import { makeSpot } from '../../utils/tripFixtures'
+import { makePlace, makeSpot } from '../../utils/tripFixtures'
 
 const widthRef = ref(1024)
 
@@ -510,7 +510,7 @@ describe('Trip page', () => {
 
         expect(bodyWrapper.text()).toContain('Delete "Before we go"?')
         expect(bodyWrapper.text()).toContain('Its 2 checklists and 1 note will be deleted too. This can\'t be undone.')
-        await bodyWrapper.find('[data-testid="delete-list-btn"]').trigger('click')
+        await bodyWrapper.find('[data-testid="confirm-delete-btn"]').trigger('click')
         await flushPromises()
 
         expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/t1/lists/l1', { method: 'DELETE' })
@@ -557,6 +557,180 @@ describe('Trip page', () => {
       await wrapper.find('[data-testid="lists-panel"]').findAll('button').find(button => button.text() === 'Try again')!.trigger('click')
       expect(listsRefreshMock).toHaveBeenCalled()
       expect(spotsRefreshMock).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Items in lists', () => {
+    const ameyoko = makePlace({ id: 'p1', name: 'Ameyoko Market', city: 'Tokyo', details: 'An open-air market.' })
+    const placeItem = {
+      id: 'i1',
+      itinerary_lists_id: 'l1',
+      type: 'place',
+      title: null,
+      content: null,
+      sort_order: 1,
+      place: { id: 'lp1', itinerary_list_item_id: 'i1', place_id: 'p1', place: ameyoko, start_time: null, end_time: null, marked_visited: false },
+      checklist_items: [],
+    }
+    const noteItem = { id: 'n1', itinerary_lists_id: 'l1', type: 'note', title: null, content: 'Bring an umbrella', sort_order: 2, place: null, checklist_items: [] }
+    const list = (items: Record<string, unknown>[]) => ({ id: 'l1', itinerary_id: 't1', name: 'Before we go', sort_order: 1, items })
+    const searchPlace = { id: 'p3', name: 'Meiji Jingu', city: 'Tokyo', details: '', address: '', country: 'Japan', website: '', phone: '', tags: [] }
+
+    it('adds places to a list from the search', async () => {
+      listsRef.value = { data: [list([])] }
+      clientMock.mockResolvedValue({ data: { ...placeItem, id: 'i9' } })
+      const { wrapper, bodyWrapper } = await mountTripPage()
+      await wrapper.find('[data-testid="list-add-place-btn"]').trigger('click')
+      await flushPromises()
+      expect(bodyWrapper.text()).toContain('Add places to Before we go')
+
+      const search = wrapper.findComponent(TripPlaceSearch)
+      expect(await search.props('add')(searchPlace)).toBe(true)
+      search.vm.$emit('added', searchPlace)
+      await bodyWrapper.find('[data-testid="place-search-done-btn"]').trigger('click')
+      await flushPromises()
+
+      expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/t1/lists/l1/items', { method: 'POST', body: { type: 'place', place_id: 'p3' } })
+      expect(toastAddMock).toHaveBeenCalledWith({ title: 'Added 1 place to Before we go', icon: 'i-lucide-circle-check', description: 'Meiji Jingu' })
+    })
+
+    it('labels a list place with the days it is on', async () => {
+      listsRef.value = { data: [list([placeItem])] }
+      spotsRef.value = { data: { '2027-03-12': [makeSpot('s1', '2027-03-12', { place_id: 'p1' })], '2027-03-18': [makeSpot('s2', '2027-03-18', { place_id: 'p1' })] } }
+      const { wrapper } = await mountTripPage()
+
+      expect(wrapper.find('[data-testid="list-place-days"]').text()).toBe('On days 1 and 7')
+      expect(wrapper.find('[data-testid="add-to-day-btn"]').exists()).toBe(false)
+    })
+
+    it('offers Add to a day for a list place that is on no day', async () => {
+      listsRef.value = { data: [list([placeItem])] }
+      const { wrapper } = await mountTripPage()
+
+      expect(wrapper.find('[data-testid="list-place-days"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="add-to-day-btn"]').text()).toBe('Add to a day')
+    })
+
+    it('adds a list place to a day from the picker, without times', async () => {
+      listsRef.value = { data: [list([placeItem])] }
+      clientMock.mockResolvedValue({ data: makeSpot('s9', '2027-03-13', { place_id: 'p1' }) })
+      const { wrapper, bodyWrapper } = await mountTripPage()
+      await wrapper.find('[data-testid="add-to-day-btn"]').trigger('click')
+
+      expect(bodyWrapper.text()).toContain('Add to a day')
+      expect(bodyWrapper.text()).toContain('Ameyoko Market')
+      await bodyWrapper.find('[data-testid="day-option-2027-03-13"]').trigger('click')
+      expect(bodyWrapper.find('[data-testid="day-picker-confirm-btn"]').text()).toBe('Add to day 2')
+      await bodyWrapper.find('[data-testid="day-picker-confirm-btn"]').trigger('click')
+      await flushPromises()
+
+      expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/t1/spots', { method: 'POST', body: { place_id: 'p1', visit_date: '2027-03-13' } })
+      expect(toastAddMock).toHaveBeenCalledWith({ title: 'Added to day 2', icon: 'i-lucide-circle-check', description: 'Ameyoko Market' })
+      expect(wrapper.find('[data-testid="list-place-i1"]').exists()).toBe(true)
+    })
+
+    it('turns Add to a day off when the trip has no dates', async () => {
+      tripRef.value = { data: { ...japanTrip, start_date: null, end_date: null } }
+      listsRef.value = { data: [list([placeItem])] }
+      const { wrapper } = await mountTripPage()
+
+      const items = menuItems(wrapper, 'item-menu-btn-i1')
+      expect(items.find(item => item.label === 'Add to a day')?.disabled).toBe(true)
+      expect(items.some(item => item.type === 'label' && item.label === 'Add the trip\'s dates first')).toBe(true)
+    })
+
+    it('removes a list place without asking', async () => {
+      listsRef.value = { data: [list([placeItem, noteItem])] }
+      clientMock.mockResolvedValue(undefined)
+      const { wrapper } = await mountTripPage()
+      await selectMenuItem(wrapper, 'item-menu-btn-i1', 'Remove from list')
+      await flushPromises()
+
+      expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/t1/lists/l1/items/i1', { method: 'DELETE' })
+      expect(wrapper.find('[data-testid="list-place-i1"]').exists()).toBe(false)
+    })
+
+    it('shows a removed place with only Remove from list', async () => {
+      listsRef.value = { data: [list([{ ...placeItem, place: null }])] }
+      const { wrapper } = await mountTripPage()
+
+      expect(wrapper.find('[data-testid="list-place-i1"]').text()).toContain('This place was removed')
+      expect(menuItems(wrapper, 'item-menu-btn-i1').map(item => item.label)).toEqual(['Remove from list'])
+    })
+
+    it('opens a list place to show its details, without visited or times', async () => {
+      listsRef.value = { data: [list([placeItem])] }
+      const { wrapper } = await mountTripPage()
+      await wrapper.find('[data-testid="list-place-toggle-i1"]').trigger('click')
+
+      const row = wrapper.find('[data-testid="list-place-i1"]')
+      expect(row.text()).toContain('An open-air market.')
+      expect(row.find('[data-testid="stop-visited-btn"]').exists()).toBe(false)
+      expect(row.find('[data-testid="stop-edit-times-btn"]').exists()).toBe(false)
+    })
+
+    describe('notes', () => {
+      beforeEach(() => {
+        listsRef.value = { data: [list([noteItem])] }
+      })
+
+      it('creates a note only on Save', async () => {
+        clientMock
+          .mockResolvedValueOnce({ data: { id: 'n9', itinerary_lists_id: 'l1', type: 'note', content: null, sort_order: 3 } })
+          .mockResolvedValueOnce({ data: { id: 'n9', itinerary_lists_id: 'l1', type: 'note', content: 'Book the ryokan', sort_order: 3 } })
+        const { wrapper } = await mountTripPage()
+        await wrapper.find('[data-testid="list-add-note-btn"]').trigger('click')
+
+        expect(wrapper.find('[data-testid="note-save-btn"]').attributes()).toHaveProperty('disabled')
+        expect(clientMock).not.toHaveBeenCalled()
+        await wrapper.find('[data-testid="note-input"]').setValue('Book the ryokan')
+        await wrapper.find('[data-testid="note-save-btn"]').trigger('click')
+        await flushPromises()
+
+        expect(clientMock).toHaveBeenCalledTimes(2)
+        expect(wrapper.find('[data-testid="note-n9"]').text()).toContain('Book the ryokan')
+        expect(wrapper.find('[data-testid="note-input"]').exists()).toBe(false)
+      })
+
+      it('keeps the typed text when saving a note fails', async () => {
+        clientMock.mockRejectedValue(new Error('Network Error'))
+        const { wrapper } = await mountTripPage()
+        await wrapper.find('[data-testid="list-add-note-btn"]').trigger('click')
+        await wrapper.find('[data-testid="note-input"]').setValue('Book the ryokan')
+        await wrapper.find('[data-testid="note-save-btn"]').trigger('click')
+        await flushPromises()
+
+        expect((wrapper.find('[data-testid="note-input"]').element as HTMLTextAreaElement).value).toBe('Book the ryokan')
+        expect(toastAddMock).toHaveBeenCalled()
+      })
+
+      it('edits a note by tapping its text', async () => {
+        clientMock.mockResolvedValue({ data: { ...noteItem, content: 'Bring two umbrellas' } })
+        const { wrapper } = await mountTripPage()
+        await wrapper.find('[data-testid="note-text-n1"]').trigger('click')
+
+        const input = wrapper.find('[data-testid="note-input"]')
+        expect((input.element as HTMLTextAreaElement).value).toBe('Bring an umbrella')
+        await input.setValue('Bring two umbrellas')
+        await wrapper.find('[data-testid="note-save-btn"]').trigger('click')
+        await flushPromises()
+
+        expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/t1/lists/l1/items/n1', { method: 'PATCH', body: { type: 'note', content: 'Bring two umbrellas' } })
+        expect(wrapper.find('[data-testid="note-n1"]').text()).toContain('Bring two umbrellas')
+      })
+
+      it('asks before deleting a note', async () => {
+        clientMock.mockResolvedValue(undefined)
+        const { wrapper, bodyWrapper } = await mountTripPage()
+        await selectMenuItem(wrapper, 'item-menu-btn-n1', 'Delete')
+
+        expect(bodyWrapper.text()).toContain('Delete this note?')
+        await bodyWrapper.find('[data-testid="confirm-delete-btn"]').trigger('click')
+        await flushPromises()
+
+        expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/t1/lists/l1/items/n1', { method: 'DELETE' })
+        expect(wrapper.find('[data-testid="note-n1"]').exists()).toBe(false)
+      })
     })
   })
 

@@ -9,6 +9,8 @@ const props = defineProps<{
   add: (place: SearchPlace) => Promise<boolean>
   // True for a place that's already there. Add still works, since a place can be added twice.
   isOnTarget?: (placeId: string) => boolean
+  // What a place already there says. A day's search says "Already on this day".
+  onTargetLabel?: string
 }>()
 
 const emit = defineEmits<{
@@ -103,7 +105,7 @@ const showNoMatch = computed(() => !pending.value && !!searchedTerm.value && !re
             v-if="isOnTarget?.(place.id)"
             class="text-xs text-dimmed"
           >
-            Already on this day
+            {{ onTargetLabel ?? 'Already on this day' }}
           </p>
         </div>
         <UButton
