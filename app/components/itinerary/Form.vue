@@ -67,6 +67,14 @@ function triggerSubmit() {
   (formRef.value as any)?.submit()
 }
 
+// The date watchers skip undefined, so the form fields are emptied here too.
+function clearDates() {
+  startDate.value = undefined
+  endDate.value = undefined
+  form.value.start_date = ''
+  form.value.end_date = ''
+}
+
 // A trip may have no dates yet, but never only one of them.
 function validate(values: typeof form.value): FormError[] {
   const errors: FormError[] = []
@@ -214,6 +222,17 @@ async function handleSubmit() {
               </template>
             </UPopover>
           </UFormField>
+        </div>
+        <div v-if="startDate || endDate">
+          <UButton
+            label="Clear dates"
+            variant="link"
+            color="neutral"
+            size="xs"
+            icon="i-lucide-x"
+            data-testid="clear-dates-btn"
+            @click="clearDates"
+          />
         </div>
       </div>
     </div>

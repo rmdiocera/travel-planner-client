@@ -323,6 +323,64 @@ describe('Index page', () => {
     })
   })
 
+  describe('Clear dates', () => {
+    const CLEAR_DATES_BTN = 'button[data-testid="clear-dates-btn"]'
+
+    afterEach(() => {
+      upcomingItineraries = []
+    })
+
+    it('shows Clear dates only once a date is picked', async () => {
+      const { bodyWrapper } = await mountIndexPage()
+      expect(bodyWrapper.find(CLEAR_DATES_BTN).exists()).toBe(false)
+
+      await pickDate(bodyWrapper, 'start', '2026-07-21')
+      expect(bodyWrapper.find(CLEAR_DATES_BTN).exists()).toBe(true)
+    })
+
+    it('clears both dates', async () => {
+      clientMock.mockResolvedValue({ data: { id: 'i1', name: 'Trip to Kyoto', start_date: null, end_date: null } })
+      const { bodyWrapper } = await mountIndexPage()
+      await pickDate(bodyWrapper, 'start', '2026-07-21')
+      await pickDate(bodyWrapper, 'end', '2026-07-28')
+      await bodyWrapper.find(CLEAR_DATES_BTN).trigger('click')
+
+      expect(bodyWrapper.find('button[data-testid="select-start-date-btn"] span:not([aria-hidden])').text()).toBe('Select a date')
+      expect(bodyWrapper.find('button[data-testid="select-end-date-btn"] span:not([aria-hidden])').text()).toBe('Select a date')
+
+      await fillName(bodyWrapper)
+      await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
+      await flushPromises()
+
+      expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries', {
+        method: 'POST',
+        body: { name: 'Trip to Kyoto', start_date: '', end_date: '' },
+      })
+    })
+
+    it('clears an edited trip\'s dates', async () => {
+      upcomingItineraries = [upcomingItinerary]
+      clientMock.mockResolvedValue({ data: { ...upcomingItinerary, start_date: null, end_date: null } })
+      const { wrapper, bodyWrapper } = await mountIndexPage({ openCreateModal: false })
+
+      // Grid's menu is a teleported Nuxt UI dropdown, so emit what its Edit item emits.
+      const grid = wrapper.findComponent(ItineraryGrid)
+      grid.vm.$emit('isModalOpen', true)
+      grid.vm.$emit('isEditing', true)
+      grid.vm.$emit('selectedItinerary', upcomingItinerary)
+      await nextTick()
+
+      await bodyWrapper.find(CLEAR_DATES_BTN).trigger('click')
+      await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
+      await flushPromises()
+
+      expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/i2', {
+        method: 'PATCH',
+        body: { name: 'Trip to Kyoto', start_date: '', end_date: '' },
+      })
+    })
+  })
+
   describe('Integration with Modal and Slideover', async () => {
     it('shows a modal when page is accessed on medium and large devices', async () => {
       const { wrapper, bodyWrapper } = await mountIndexPage({ openCreateModal: false })
