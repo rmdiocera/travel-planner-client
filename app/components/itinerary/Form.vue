@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { CalendarDate } from '@internationalized/date'
 import { getLocalTimeZone, DateFormatter, today } from '@internationalized/date'
+import type { FormError } from '@nuxt/ui'
 import type { Itinerary, ItineraryResponse } from '~/types/itinerary'
 
 const props = defineProps<{
@@ -66,6 +67,28 @@ function triggerSubmit() {
   (formRef.value as any)?.submit()
 }
 
+// A trip may have no dates yet, but never only one of them.
+function validate(values: typeof form.value): FormError[] {
+  const errors: FormError[] = []
+
+  if (!values.name.trim()) {
+    errors.push({ name: 'name', message: 'Enter a name' })
+  }
+
+  if (values.start_date && !values.end_date) {
+    errors.push({ name: 'end_date', message: 'Select an end date too' })
+  }
+  else if (!values.start_date && values.end_date) {
+    errors.push({ name: 'start_date', message: 'Select a start date too' })
+  }
+  // Both are YYYY-MM-DD, so comparing the strings compares the dates.
+  else if (values.start_date && values.end_date && values.end_date < values.start_date) {
+    errors.push({ name: 'end_date', message: 'The end date can\'t be before the start date' })
+  }
+
+  return errors
+}
+
 async function handleSubmit() {
   emit('loading', true)
 
@@ -119,6 +142,7 @@ async function handleSubmit() {
   <UForm
     ref="form"
     :state="form"
+    :validate="validate"
     @submit="handleSubmit"
   >
     <div class="grid gap-4">

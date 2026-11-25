@@ -1,6 +1,7 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
+import type { DOMWrapper } from '@vue/test-utils'
 import { mountIndexPage } from '../../utils/mountIndexPage'
 import ItineraryGrid from '~/components/itinerary/Grid.vue'
 
@@ -58,6 +59,15 @@ vi.mock(import('@vueuse/core'), async (importOriginal) => {
 })
 
 describe('Index page', () => {
+  async function fillName(bodyWrapper: DOMWrapper<Element>) {
+    await bodyWrapper.find('input[name="name"]').setValue('Trip to Kyoto')
+  }
+
+  async function pickDate(bodyWrapper: DOMWrapper<Element>, field: 'start' | 'end', date: string) {
+    await bodyWrapper.find(`button[data-testid="select-${field}-date-btn"]`).trigger('click')
+    await bodyWrapper.find(`div[data-value="${date}"]`).trigger('click')
+  }
+
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-07-01'))
@@ -170,6 +180,7 @@ describe('Index page', () => {
 
     it('closes the modal on successful POST', async () => {
       const { bodyWrapper } = await mountIndexPage()
+      await fillName(bodyWrapper)
       await bodyWrapper.find('button[data-testid="create-itinerary-btn"]').trigger('click')
       await flushPromises()
 
@@ -179,6 +190,7 @@ describe('Index page', () => {
 
     it('shows a success toast with the correct title and icon on successful POST', async () => {
       const { bodyWrapper } = await mountIndexPage()
+      await fillName(bodyWrapper)
       await bodyWrapper.find('button[data-testid="create-itinerary-btn"]').trigger('click')
       await flushPromises()
 
@@ -198,6 +210,7 @@ describe('Index page', () => {
       })
 
       const { bodyWrapper } = await mountIndexPage()
+      await fillName(bodyWrapper)
 
       const submitBtn = bodyWrapper.find('button[data-testid="create-itinerary-btn"]')
       await submitBtn.trigger('click')
@@ -226,18 +239,7 @@ describe('Index page', () => {
       })
 
       const { bodyWrapper } = await mountIndexPage()
-
-      const startDateCalendar = bodyWrapper.find('button[data-testid="select-start-date-btn"]')
-      await startDateCalendar.trigger('click')
-      const matchingStartDateDiv = bodyWrapper.find('div[data-value="2026-07-28"]')
-      await matchingStartDateDiv?.trigger('click')
-      expect(startDateCalendar.find('span:not([aria-hidden])').text()).toBe('Jul 28, 2026')
-
-      const endDateCalendar = bodyWrapper.find('button[data-testid="select-end-date-btn"]')
-      await endDateCalendar.trigger('click')
-      const matchingendDateDiv = bodyWrapper.find('div[data-value="2026-07-21"]')
-      await matchingendDateDiv?.trigger('click')
-      expect(endDateCalendar.find('span:not([aria-hidden])').text()).toBe('Jul 21, 2026')
+      await fillName(bodyWrapper)
 
       await bodyWrapper.find('button[data-testid="create-itinerary-btn"]').trigger('click')
       await flushPromises()
@@ -251,6 +253,7 @@ describe('Index page', () => {
       clientMock.mockRejectedValue(new Error('Network Error'))
 
       const { bodyWrapper } = await mountIndexPage()
+      await fillName(bodyWrapper)
       await bodyWrapper.find('button[data-testid="create-itinerary-btn"]').trigger('click')
       await flushPromises()
 
@@ -260,6 +263,63 @@ describe('Index page', () => {
         description: 'There was a problem with your request',
         color: 'error',
       })
+    })
+  })
+
+  describe('Form validation', () => {
+    it('shows Enter a name and sends nothing when the name is empty', async () => {
+      const { bodyWrapper } = await mountIndexPage()
+      await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
+      await flushPromises()
+
+      expect(bodyWrapper.findAll('.text-error').map(e => e.text())).toContain('Enter a name')
+      expect(clientMock).not.toHaveBeenCalled()
+    })
+
+    it('asks for the end date when only the start is picked', async () => {
+      const { bodyWrapper } = await mountIndexPage()
+      await fillName(bodyWrapper)
+      await pickDate(bodyWrapper, 'start', '2026-07-21')
+      await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
+      await flushPromises()
+
+      expect(bodyWrapper.findAll('.text-error').map(e => e.text())).toContain('Select an end date too')
+      expect(clientMock).not.toHaveBeenCalled()
+    })
+
+    it('asks for the start date when only the end is picked', async () => {
+      const { bodyWrapper } = await mountIndexPage()
+      await fillName(bodyWrapper)
+      await pickDate(bodyWrapper, 'end', '2026-07-28')
+      await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
+      await flushPromises()
+
+      expect(bodyWrapper.findAll('.text-error').map(e => e.text())).toContain('Select a start date too')
+      expect(clientMock).not.toHaveBeenCalled()
+    })
+
+    it('shows an error when the end date is before the start date', async () => {
+      const { bodyWrapper } = await mountIndexPage()
+      await fillName(bodyWrapper)
+      await pickDate(bodyWrapper, 'start', '2026-07-21')
+      await pickDate(bodyWrapper, 'end', '2026-07-28')
+      await pickDate(bodyWrapper, 'start', '2026-07-30')
+      await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
+      await flushPromises()
+
+      expect(bodyWrapper.findAll('.text-error').map(e => e.text())).toContain('The end date can\'t be before the start date')
+      expect(clientMock).not.toHaveBeenCalled()
+    })
+
+    it('clears the errors when the form is closed and opened again', async () => {
+      const { wrapper, bodyWrapper } = await mountIndexPage()
+      await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
+      await flushPromises()
+      await bodyWrapper.find(SELECTORS.closeBtn).trigger('click')
+      await wrapper.find(SELECTORS.openBtn).trigger('click')
+      await nextTick()
+
+      expect(bodyWrapper.findAll('.text-error')).toHaveLength(0)
     })
   })
 
