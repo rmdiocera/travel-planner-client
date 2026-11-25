@@ -7,12 +7,13 @@ import { makeSpot } from '../../utils/tripFixtures'
 
 const widthRef = ref(1024)
 
-const { clientMock, lazyFetchMock, toastAddMock, tripRefreshMock, spotsRefreshMock } = vi.hoisted(() => ({
+const { clientMock, lazyFetchMock, toastAddMock, tripRefreshMock, spotsRefreshMock, navigateToMock } = vi.hoisted(() => ({
   clientMock: vi.fn(),
   lazyFetchMock: vi.fn(),
   toastAddMock: vi.fn(),
   tripRefreshMock: vi.fn(),
   spotsRefreshMock: vi.fn(),
+  navigateToMock: vi.fn(),
 }))
 
 const japanTrip = { id: 't1', name: 'Japan with friends', start_date: '2027-03-12', end_date: '2027-03-18' }
@@ -33,6 +34,7 @@ mockNuxtImport('useLazySanctumFetch', () => {
 })
 mockNuxtImport('useSanctumClient', () => () => clientMock)
 mockNuxtImport('useToast', () => () => ({ add: toastAddMock }))
+mockNuxtImport('navigateTo', () => navigateToMock)
 mockNuxtImport('useRoute', () => () => ({
   params: { id: 't1' },
   path: '/trips/t1',
@@ -56,7 +58,7 @@ describe('Trip page', () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2027-03-01T12:00:00'))
     widthRef.value = 1024
-    for (const mock of [clientMock, lazyFetchMock, toastAddMock, tripRefreshMock, spotsRefreshMock]) {
+    for (const mock of [clientMock, lazyFetchMock, toastAddMock, tripRefreshMock, spotsRefreshMock, navigateToMock]) {
       mock.mockReset()
     }
     tripRef.value = { data: japanTrip }
@@ -150,6 +152,93 @@ describe('Trip page', () => {
 
       expect(wrapper.find('[data-testid="days-skeleton"]').exists()).toBe(true)
       expect(wrapper.find('[data-testid="trip-name"]').exists()).toBe(false)
+    })
+  })
+
+  describe('Edit and delete', () => {
+    const ERROR_TOAST = {
+      title: 'Something went wrong',
+      icon: 'i-lucide-circle-x',
+      description: 'There was a problem with your request',
+      color: 'error',
+    }
+
+    it('opens Edit trip with the trip\'s details', async () => {
+      const { wrapper, bodyWrapper } = await mountTripPage()
+      await selectMenuItem(wrapper, 'trip-menu-btn', 'Edit trip')
+
+      expect((bodyWrapper.find('input[name="name"]').element as HTMLInputElement).value).toBe('Japan with friends')
+      expect(bodyWrapper.find('[data-testid="close-modal-btn"]').exists()).toBe(true)
+    })
+
+    it('opens Edit trip in a sheet on a phone', async () => {
+      widthRef.value = 767
+      const { wrapper, bodyWrapper } = await mountTripPage()
+      await selectMenuItem(wrapper, 'trip-menu-btn', 'Edit trip')
+
+      expect(bodyWrapper.find('[data-testid="close-slideover-btn"]').exists()).toBe(true)
+    })
+
+    it('saves Edit trip and shows the new name', async () => {
+      clientMock.mockResolvedValue({ data: { ...japanTrip, name: 'Japan and Korea' } })
+      const { wrapper, bodyWrapper } = await mountTripPage()
+      await selectMenuItem(wrapper, 'trip-menu-btn', 'Edit trip')
+      await bodyWrapper.find('[data-testid="save-trip-btn"]').trigger('click')
+      await flushPromises()
+
+      expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/t1', {
+        method: 'PATCH',
+        body: { name: 'Japan with friends', start_date: '2027-03-12', end_date: '2027-03-18' },
+      })
+      expect(wrapper.find('[data-testid="trip-name"]').text()).toBe('Japan and Korea')
+    })
+
+    it('opens Edit trip from Add dates', async () => {
+      tripRef.value = { data: { ...japanTrip, start_date: null, end_date: null } }
+      const { wrapper, bodyWrapper } = await mountTripPage()
+      await wrapper.find('[data-testid="add-dates-btn"]').trigger('click')
+
+      expect((bodyWrapper.find('input[name="name"]').element as HTMLInputElement).value).toBe('Japan with friends')
+    })
+
+    it('asks before deleting the trip, with its count of places', async () => {
+      spotsRef.value = { data: { '2027-03-13': [makeSpot('s1', '2027-03-13'), makeSpot('s2', '2027-03-13')] } }
+      const { wrapper, bodyWrapper } = await mountTripPage()
+      await selectMenuItem(wrapper, 'trip-menu-btn', 'Delete trip')
+
+      expect(bodyWrapper.text()).toContain('Delete this trip?')
+      expect(bodyWrapper.text()).toContain('This will permanently delete Japan with friends, its 2 places on days. This cannot be undone.')
+    })
+
+    it('keeps the Trips page wording for a trip with nothing in it', async () => {
+      const { wrapper, bodyWrapper } = await mountTripPage()
+      await selectMenuItem(wrapper, 'trip-menu-btn', 'Delete trip')
+
+      expect(bodyWrapper.text()).toContain('This will permanently delete Japan with friends and all its associated data. This cannot be undone.')
+    })
+
+    it('deletes the trip and goes back to the Trips page', async () => {
+      clientMock.mockResolvedValue(undefined)
+      const { wrapper, bodyWrapper } = await mountTripPage()
+      await selectMenuItem(wrapper, 'trip-menu-btn', 'Delete trip')
+      await bodyWrapper.find('[data-testid="delete-trip-btn"]').trigger('click')
+      await flushPromises()
+
+      expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/t1', { method: 'DELETE' })
+      expect(toastAddMock).toHaveBeenCalledWith({ title: 'Trip deleted successfully', icon: 'i-lucide-circle-check' })
+      expect(navigateToMock).toHaveBeenCalledWith('/')
+    })
+
+    it('keeps the trip and shows the error toast when deleting fails', async () => {
+      clientMock.mockRejectedValue(new Error('Network Error'))
+      const { wrapper, bodyWrapper } = await mountTripPage()
+      await selectMenuItem(wrapper, 'trip-menu-btn', 'Delete trip')
+      await bodyWrapper.find('[data-testid="delete-trip-btn"]').trigger('click')
+      await flushPromises()
+
+      expect(toastAddMock).toHaveBeenCalledWith(ERROR_TOAST)
+      expect(navigateToMock).not.toHaveBeenCalled()
+      expect(wrapper.find('[data-testid="trip-name"]').text()).toBe('Japan with friends')
     })
   })
 
