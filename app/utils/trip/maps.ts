@@ -5,5 +5,5 @@ export function mapsUrl(place: { name: string, address: string }): string {
 
 // Websites are stored as typed, so a bare domain gets a protocol.
 export function websiteHref(website: string): string {
-  return /^https?:\/\//.test(website) ? website : `https://${website}`
+  return /^https?:\/\//i.test(website) ? website : `https://${website}`
 }

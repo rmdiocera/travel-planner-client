@@ -14,6 +14,12 @@ const emit = defineEmits<{
 
 const days = injectTripDays()
 
+// The editor takes the place of the buttons that were focused, so focus goes to the Arrive field when it opens.
+const root = useTemplateRef<HTMLElement>('root')
+onMounted(() => {
+  root.value?.querySelector<HTMLElement>('[data-testid="times-arrive"] [role="spinbutton"], [data-testid="times-arrive"] input')?.focus()
+})
+
 const arrive = ref<Time | null>(props.stop.start_time ? parseTime(props.stop.start_time) : null)
 const leave = ref<Time | null>(props.stop.end_time ? parseTime(props.stop.end_time) : null)
 const saving = ref(false)
@@ -49,7 +55,10 @@ async function save() {
 </script>
 
 <template>
-  <div class="flex flex-col gap-3 pb-3">
+  <div
+    ref="root"
+    class="flex flex-col gap-3 pb-3"
+  >
     <div class="flex gap-3">
       <UFormField
         label="Arrive"

@@ -131,6 +131,7 @@
       <Modal
         v-if="!isMobile"
         v-model:open="dayPickerOpen"
+        :dismissible="!isMoving"
         :title="dayPickerTitle"
         :description="dayPickerDescription"
       >
@@ -146,6 +147,7 @@
               label="Cancel"
               color="neutral"
               variant="outline"
+              :disabled="isMoving"
               @click="dayPickerOpen = false"
             />
             <UButton
@@ -162,6 +164,7 @@
       <Slideover
         v-else
         v-model:open="dayPickerOpen"
+        :dismissible="!isMoving"
         side="bottom"
         :title="dayPickerTitle"
         :description="dayPickerDescription"
@@ -311,7 +314,7 @@
                 />
               </template>
             </EmptyState>
-            <TripDaysSkeleton v-else-if="daysPending" />
+            <TripDaysSkeleton v-else-if="daysInitialLoading" />
             <template v-else>
               <UAlert
                 v-if="outside.length"
@@ -428,7 +431,7 @@ const { listCount } = lists
 const tabs = [{ value: 'days', label: 'Days' }, { value: 'lists', label: 'Lists' }] as const
 const activeTab = ref<'days' | 'lists'>('days')
 // Destructured because refs nested in an object aren't unwrapped in the template.
-const { pending: daysPending, error: daysError, refresh: refreshDays, days: tripDays, outside, stopCount } = days
+const { pending: daysPending, initialLoading: daysInitialLoading, error: daysError, refresh: refreshDays, days: tripDays, outside, stopCount } = days
 
 const { width } = useWindowSize()
 const isMobile = computed(() => width.value < 768)
