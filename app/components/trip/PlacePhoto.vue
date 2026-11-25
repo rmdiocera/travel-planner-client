@@ -26,18 +26,19 @@ const showPhoto = computed(() => mounted.value && !!url.value && failedUrl.value
     :src="url"
     alt=""
     loading="lazy"
-    class="size-10 shrink-0 rounded-md object-cover"
+    class="size-19 shrink-0 rounded-md object-cover md:h-24 md:w-36"
     data-testid="place-photo"
     @error="failedUrl = url"
   >
   <div
     v-else
-    class="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary/10"
+    class="flex size-19 shrink-0 items-center justify-center rounded-md bg-primary/10 md:h-24 md:w-36"
     data-testid="place-photo-placeholder"
   >
     <UIcon
       name="i-lucide-map-pin"
-      class="text-primary"
+      class="size-8 text-primary md:size-10"
+      data-testid="place-photo-pin"
     />
   </div>
 </template>
