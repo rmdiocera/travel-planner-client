@@ -1,3 +1,4 @@
+import type { ItineraryList } from '../../app/types/list'
 import type { NestedPlace } from '../../app/types/place'
 import type { Spot } from '../../app/types/spot'
 
@@ -29,4 +30,8 @@ export function makeSpot(id: string, date: string, overrides: Partial<Spot> = {}
     sort_order: 1,
     ...overrides,
   }
+}
+
+export function makeList(id: string, name: string, overrides: Partial<ItineraryList> = {}): ItineraryList {
+  return { id, itinerary_id: 't1', name, sort_order: 1, items: [], ...overrides }
 }
