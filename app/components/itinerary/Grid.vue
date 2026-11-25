@@ -55,12 +55,33 @@ const items = (itinerary: Itinerary) => [
       :key="itinerary.id"
       class="relative"
     >
-      <div class="aspect-video overflow-hidden">
-        <NuxtImg
-          src="/oc1.jpg"
-          class="w-full h-full object-fit rounded-md"
-        />
-      </div>
+      <!-- The menu stays outside the link: a link can't hold a button. -->
+      <NuxtLink
+        :to="`/trips/${itinerary.id}`"
+        class="block"
+        data-testid="itinerary-card-link"
+      >
+        <div class="aspect-video overflow-hidden">
+          <NuxtImg
+            src="/oc1.jpg"
+            class="w-full h-full object-fit rounded-md"
+          />
+        </div>
+        <div class="flex flex-col px-2 py-4">
+          <p class="font-semibold">
+            {{ itinerary.name }}
+          </p>
+          <p class="text-muted text-pretty text-sm flex items-center gap-2">
+            <UIcon name="i-lucide-calendar-1" />
+            <template v-if="itinerary.start_date && itinerary.end_date">
+              {{ formatStartEndDate(toLocalDate(itinerary.start_date), toLocalDate(itinerary.end_date)) }} • {{ dateDiffInDays(toLocalDate(itinerary.start_date), toLocalDate(itinerary.end_date)) }}
+            </template>
+            <template v-else>
+              No dates yet
+            </template>
+          </p>
+        </div>
+      </NuxtLink>
       <UDropdownMenu
         :items="items(itinerary)"
         :content="{
@@ -78,20 +99,6 @@ const items = (itinerary: Itinerary) => [
           :ui="{ base: 'rounded-full text-white bg-black/25 hover:bg-black/50 cursor-pointer' }"
         />
       </UDropdownMenu>
-      <div class="flex flex-col px-2 py-4">
-        <p class="font-semibold">
-          {{ itinerary.name }}
-        </p>
-        <p class="text-muted text-pretty text-sm flex items-center gap-2">
-          <UIcon name="i-lucide-calendar-1" />
-          <template v-if="itinerary.start_date && itinerary.end_date">
-            {{ formatStartEndDate(toLocalDate(itinerary.start_date), toLocalDate(itinerary.end_date)) }} • {{ dateDiffInDays(toLocalDate(itinerary.start_date), toLocalDate(itinerary.end_date)) }}
-          </template>
-          <template v-else>
-            No dates yet
-          </template>
-        </p>
-      </div>
     </div>
   </div>
 </template>

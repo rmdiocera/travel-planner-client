@@ -542,6 +542,19 @@ describe('Index page', () => {
     })
   })
 
+  describe('Trip cards', () => {
+    afterEach(() => {
+      upcomingItineraries = []
+    })
+
+    it('links each trip card to its trip page', async () => {
+      upcomingItineraries = [upcomingItinerary]
+      const { wrapper } = await mountIndexPage({ openCreateModal: false })
+
+      expect(wrapper.find('[data-testid="itinerary-card-link"]').attributes('href')).toBe('/trips/i2')
+    })
+  })
+
   describe('Cards without dates', () => {
     const undatedItinerary = { id: 'i9', name: 'Iceland someday', start_date: null, end_date: null }
 
