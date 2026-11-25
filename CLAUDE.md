@@ -4,7 +4,7 @@ Guidance for working in this repo. Update it when conventions change.
 
 ## What this is
 
-**Dayfarer** — the Nuxt 4 / Vue 3 frontend for a travel planner. It talks to a separate **Laravel API** (`/api/v1/...`, Laravel Sanctum auth) that is not in this repo. Users manage **itineraries** (shown as "trips", grouped as past / ongoing / upcoming); **places** (with tags and images) are managed from an admin page. A Guest at `/` sees the **Welcome page**: an animated hero, "How it works" and a closing band, all leading to registration.
+**Dayfarer** — the Nuxt 4 / Vue 3 frontend for a travel planner. It talks to a separate **Laravel API** (`/api/v1/...`, Laravel Sanctum auth) that is not in this repo. Users manage **itineraries** (shown as "trips", grouped as ongoing / upcoming / unscheduled / past; a trip may have no dates yet); **places** (with tags and images) are managed from an admin page. A Guest at `/` sees the **Welcome page**: an animated hero, "How it works" and a closing band, all leading to registration.
 
 Stack: Nuxt 4 (`srcDir: 'app/'`), Nuxt UI 4 (Tailwind 4), `@nuxt/image`, `@nuxt/fonts`, `nuxt-auth-sanctum`, VueUse, `@internationalized/date`, ESLint (`@nuxt/eslint`, stylistic on), Vitest.
 
@@ -41,7 +41,7 @@ app/
     ui/                    Thin wrappers over Nuxt UI: Modal, Slideover, ConfirmModal, EmptyState
     FormActions.vue        Currently unused
   composables/             useAppToast.ts (showToast(title, icon, description?, color?)), useVerificationToast.ts (the "email verified" / "invalid link" toasts), useResendCooldown.ts (5-minute resend countdown kept in localStorage per user), useHeroPause.ts (the hero's pause, kept in localStorage)
-  utils/                   date.ts (formatStartEndDate, dateDiffInDays, toCalendarDate), storage.ts (getLocalStorage), welcome.ts (WELCOME_HEADLINE, WELCOME_TEXT): auto-imported
+  utils/                   date.ts (formatStartEndDate, dateDiffInDays, toLocalDate, compareToToday, toCalendarDate), storage.ts (getLocalStorage), welcome.ts (WELCOME_HEADLINE, WELCOME_TEXT): auto-imported
   utils/routeScene/        The hero scene as pure TS: landmarks.ts (line drawings), routes.ts (cities, layouts, timing), buildScene.ts, cycle.ts. A subfolder, so NOT auto-imported: import it explicitly
   types/                   itinerary.ts, place.ts, tag.ts, image.ts, user.ts (+ API response wrapper types)
   server/api/              countries.get.ts only: the local @countrystatecity/countries list (serverDir is app/server)
@@ -49,7 +49,7 @@ test/
   e2e/                     Call the real Laravel API directly; globalSetup.ts logs in once per run
   nuxt/                    Component + page tests (nuxt environment, happy-dom); setup.ts runs before every test
   unit/                    Plain node tests, no Nuxt boot (loadE2eEnv, routeScene, routeCycle)
-  utils/                   mountXxx helpers; apiSession.ts (cookie-session client for e2e); loadE2eEnv.ts (the e2e settings)
+  utils/                   mountXxx helpers; menu.ts (menuItems, selectMenuItem: read a Nuxt UI menu's items); timeZone.ts (setTimeZone: change and restore Node's time zone); apiSession.ts (cookie-session client for e2e); loadE2eEnv.ts (the e2e settings)
   fixtures/                Sample images for upload tests
 ```
 
@@ -68,7 +68,7 @@ Registration and email verification use the Laravel Fortify routes at the **back
 
 ### API shapes
 
-Responses are Laravel resources wrapped in `{ data: ... }`. Types live in `app/types/` (`ItineraryResponse`, `ItinerariesGroupedResponse`, `PlacesResponse`, `TagsResponse`, ...). Dates are `YYYY-MM-DD` strings in practice even though `Itinerary.start_date/end_date` are typed `Date` — wrap with `new Date(...)` before formatting, as existing code does. Validation errors (422) arrive at `error.data.errors`: the body is `{ message, errors }`, with `errors` shaped `{ field: string[] }`. The user endpoint returns the user object at the top level, not wrapped in `{ data: ... }`.
+Responses are Laravel resources wrapped in `{ data: ... }`. Types live in `app/types/` (`ItineraryResponse`, `ItinerariesGroupedResponse`, `PlacesResponse`, `TagsResponse`, ...). Dates are `YYYY-MM-DD` strings, or `null` for an unscheduled trip (`Itinerary.start_date/end_date` are `string | null`). Never read them with `new Date("YYYY-MM-DD")`: that is UTC midnight, which is the previous day west of UTC. Use `toLocalDate` / `compareToToday` (`app/utils/date.ts`), or `parseDate` from `@internationalized/date`. Validation errors (422) arrive at `error.data.errors`: the body is `{ message, errors }`, with `errors` shaped `{ field: string[] }`. The user endpoint returns the user object at the top level, not wrapped in `{ data: ... }`.
 
 ### Pages, layouts, state
 
@@ -77,11 +77,11 @@ Responses are Laravel resources wrapped in `{ data: ... }`. Types live in `app/t
 - Text people read says "trip" in sentence case; code, types, API paths and test ids keep "itinerary" (see `GLOSSARY.md`).
 - All state is local `ref`s in the page; no Pinia/store. `Grid`/`Form` communicate upward through emits (`isModalOpen`, `isSlideoverOpen`, `isConfirmModalOpen`, `isEditing`, `selectedItinerary`, `itineraryCreated`, `itineraryUpdated`, `loading`), and the page mutates the fetched `itineraries` data locally (insert into the right bucket, splice on delete) rather than refetching. `reorderItineraries()` reassigns the object to force reactivity/ordering.
 - Responsive pattern: `useWindowSize` + `isMobile = width < 768`. Desktop uses `ui/Modal`, mobile uses `ui/Slideover` (`side="bottom"`) with the same `ItineraryForm`. Both are inside `<ClientOnly>`. Buttons exist in desktop/mobile variants with different `data-testid`s.
-- Forms: `UForm` with `:state` (one `ref({...})` object, not `reactive()`), `@submit`; parent triggers submit through an exposed `triggerSubmit()` (`defineExpose`) that calls `formRef.submit()`. Server validation errors are pushed back with `formRef.setErrors([...])`; any other failure shows an error toast. Create/edit share one form component keyed off `selectedItinerary`.
+- Forms: `UForm` with `:state` (one `ref({...})` object, not `reactive()`), `@submit`; parent triggers submit through an exposed `triggerSubmit()` (`defineExpose`) that calls `formRef.submit()`. Server validation errors are pushed back with `formRef.setErrors([...])`; any other failure shows an error toast. Create/edit share one form component keyed off `selectedItinerary`. `ItineraryForm` validates with a `validate` function: a name is required, and dates come both or neither ("Clear dates" empties both); creating allows a start from today, editing any start, and an end date is never before the start or today. The date pickers don't report to the form, so it re-checks dates itself while a date error is showing.
 - Feedback: `useAppToast().showToast(...)` — success uses `i-lucide-circle-check`; failure uses `'Something went wrong', 'i-lucide-circle-x', 'There was a problem with your request', 'error'`. Tests assert these exact strings.
 - Auth pages (`login`, `register`, `verify-email`) use `definePageMeta({ layout: false })` and `<NuxtLayout name="auth">`; `login` and `register` add `middleware: ['sanctum:guest']`. Their feedback is an inline `UAlert` at the top of the card (`role="alert"` for errors), not a toast. Toasts are kept for results shown after a redirect: the `?verified` handler and the session-expired notice. On `verify-email`, a success or info `UAlert` has no role: its text also goes to a status region that is on the page from the start, because screen readers often don't read out a live region that appears with its text already in it. Its Resend button uses `aria-disabled` during the countdown, so it keeps keyboard focus, and gets focus back after the request (loading disables it, and a browser moves focus off a disabled button).
 - Loading/error UX: `GridSkeleton` while pending, `EmptyState` with "Try again" (calls `refresh()`) on error, `EmptyState` for no data.
-- Past itineraries are read-only: Edit is disabled when `end_date < today`, and the Past grid isn't wired to edit/delete handlers.
+- Past itineraries are read-only: Edit is disabled when `end_date` is before today, and the Past grid isn't wired to edit/delete handlers. A trip without dates is never past. The Trips page's "Unscheduled" group (between Upcoming and Past) holds trips missing a date; the grouped response's `unscheduled` key is optional in the type, so the page works with a backend that doesn't send it.
 - Itinerary images are currently a hard-coded `/oc1.jpg` from `public/` via `NuxtImg`.
 
 ## Docs lookup (MCP)
@@ -123,6 +123,7 @@ Conventions in `test/nuxt`:
 - `test/nuxt/setup.ts` gives each test its own Vue `idPrefix`. Nuxt UI reports typing to its form 300 ms later, on a channel named after the form's id, and Vue would give the form the same id in every test, so typing at the end of one test could reach the next test's form (`register.test.ts` has a pair of tests for this).
 - `RouteScene.test.ts` mocks `usePreferredReducedMotion` (shared `motionRef`) and fakes only `setTimeout`/`clearTimeout`, which is all the city cycle uses. happy-dom runs no CSS animations and has no `getBBox`, so the scene tests check names, classes, labels and timers; how it looks is checked in a browser.
 - Nuxt UI's `UButton` puts its own `data-slot="base"` on its root, overwriting a `data-slot` passed to it (`UHeader`'s menu toggle has none left); find such buttons by `aria-label` ("Open menu"). `UContainer` has no `data-slot` either; the home layout's container has `data-testid="home-container"`.
+- Nuxt UI menus open on pointer events and teleport their items to `<body>`, so tests read a menu's items with `menuItems(wrapper, triggerTestId)` (`test/utils/menu.ts`) instead of opening it; give the trigger a `data-testid`. Time-zone tests call `setTimeZone('America/Los_Angeles')` (`test/utils/timeZone.ts`): unsetting `TZ` doesn't reset Node's zone, so the helper puts the original zone back by name, and a test that only unstubs `TZ` leaks Los Angeles time into later tests. Popover calendars from earlier tests can stay in `<body>`, so look a day up inside `[data-testid="end-date-cal"]` (or the start one).
 - happy-dom doesn't move focus off an element that becomes disabled, and its `blur()` ignores disabled elements. Where a browser would drop focus (a button that starts loading), move it with `document.body.focus()` (`verify-email.test.ts`, Keyboard focus).
 
 ## Git workflow

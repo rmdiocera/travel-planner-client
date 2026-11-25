@@ -34,7 +34,7 @@ const items = (itinerary: Itinerary) => [
       emit('selectedItinerary', itinerary)
     },
     // A trip without dates isn't past, so it stays editable.
-    disabled: !!itinerary.end_date && toCalendarDate(new Date(itinerary.end_date)) < toCalendarDate(new Date()),
+    disabled: !!itinerary.end_date && compareToToday(itinerary.end_date) < 0,
   },
   {
     label: 'Delete',
@@ -85,7 +85,7 @@ const items = (itinerary: Itinerary) => [
         <p class="text-muted text-pretty text-sm flex items-center gap-2">
           <UIcon name="i-lucide-calendar-1" />
           <template v-if="itinerary.start_date && itinerary.end_date">
-            {{ formatStartEndDate(new Date(itinerary.start_date), new Date(itinerary.end_date)) }} • {{ dateDiffInDays(new Date(itinerary.start_date), new Date(itinerary.end_date)) }}
+            {{ formatStartEndDate(toLocalDate(itinerary.start_date), toLocalDate(itinerary.end_date)) }} • {{ dateDiffInDays(toLocalDate(itinerary.start_date), toLocalDate(itinerary.end_date)) }}
           </template>
           <template v-else>
             No dates yet

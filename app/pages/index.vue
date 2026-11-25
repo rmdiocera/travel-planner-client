@@ -424,7 +424,7 @@ function addNewItinerary(itinerary: ItineraryResponse) {
       // reorderItineraries() above made sure the group exists.
       itineraries.value.data.unscheduled?.push(itinerary.data)
     }
-    else if (toCalendarDate(new Date(start_date)) > toCalendarDate(new Date())) {
+    else if (compareToToday(start_date) > 0) {
       itineraries.value.data.upcoming.push(itinerary.data)
     }
     else {

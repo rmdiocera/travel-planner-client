@@ -1,9 +1,10 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime'
-import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import type { DOMWrapper, VueWrapper } from '@vue/test-utils'
 import { mountIndexPage } from '../../utils/mountIndexPage'
 import { menuItems } from '../../utils/menu'
+import { setTimeZone } from '../../utils/timeZone'
 import ItineraryGrid from '~/components/itinerary/Grid.vue'
 
 const widthRef = ref(768)
@@ -502,12 +503,7 @@ describe('Index page', () => {
     })
 
     it('shows the saved dates on their own day west of UTC', async () => {
-      // Unsetting TZ doesn't reset Node's time zone, so put the original zone back by name.
-      const originalZone = Intl.DateTimeFormat().resolvedOptions().timeZone
-      process.env.TZ = 'America/Los_Angeles'
-      onTestFinished(() => {
-        process.env.TZ = originalZone
-      })
+      setTimeZone('America/Los_Angeles')
 
       const { wrapper, bodyWrapper } = await mountIndexPage({ openCreateModal: false })
       await openEditForm(wrapper, upcomingItinerary)
@@ -644,6 +640,48 @@ describe('Index page', () => {
         description: 'There was a problem with your request',
         color: 'error',
       })
+    })
+  })
+
+  describe('Cards and grouping west of UTC', () => {
+    // 20:00 UTC on 1 Jul is 13:00 on 1 Jul in Los Angeles.
+    beforeEach(() => {
+      vi.setSystemTime(new Date('2026-07-01T20:00:00Z'))
+      setTimeZone('America/Los_Angeles')
+    })
+
+    afterEach(() => {
+      upcomingItineraries = []
+    })
+
+    it('shows the dates on a card on their own day', async () => {
+      upcomingItineraries = [upcomingItinerary]
+      const { wrapper } = await mountIndexPage({ openCreateModal: false })
+
+      expect(wrapper.text()).toContain('Jan 15, 2027 - Jan 20, 2027 • 6 days')
+    })
+
+    it('keeps Edit available on the last day of an ongoing trip', async () => {
+      upcomingItineraries = [{ id: 'i5', name: 'Trip to Osaka', start_date: '2026-06-28', end_date: '2026-07-01' }]
+      const { wrapper } = await mountIndexPage({ openCreateModal: false })
+
+      const edit = menuItems(wrapper, 'itinerary-menu-btn-i5').find(item => item.label === 'Edit')
+      expect(edit?.disabled).toBe(false)
+    })
+
+    it('files a trip that starts tomorrow under Upcoming', async () => {
+      upcomingItineraries = [upcomingItinerary]
+      clientMock.mockResolvedValue({ data: { id: 'i7', name: 'Weekend away', start_date: '2026-07-02', end_date: '2026-07-03' } })
+      const { wrapper, bodyWrapper } = await mountIndexPage()
+      await bodyWrapper.find('input[name="name"]').setValue('Weekend away')
+      await pickDate(bodyWrapper, 'start', '2026-07-02')
+      await pickDate(bodyWrapper, 'end', '2026-07-03')
+      await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
+      await flushPromises()
+
+      const headings = wrapper.findAll('h2.itinerary-heading').map(h2 => h2.text())
+      expect(headings).toEqual(['Upcoming'])
+      expect(wrapper.text()).toContain('Weekend away')
     })
   })
 
