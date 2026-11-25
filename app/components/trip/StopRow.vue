@@ -35,7 +35,30 @@ watch(() => props.open, (open) => {
   }
 })
 
+// Move up and Move down do what dragging does, for people who can't or don't drag. They are for stops on a day.
+const orderItems = computed<DropdownMenuItem[]>(() => props.variant === 'day'
+  ? [
+      {
+        label: 'Move up',
+        icon: 'i-lucide-arrow-up',
+        disabled: !!props.isFirst,
+        onSelect: () => {
+          void days.moveStop(props.stop, -1)
+        },
+      },
+      {
+        label: 'Move down',
+        icon: 'i-lucide-arrow-down',
+        disabled: !!props.isLast,
+        onSelect: () => {
+          void days.moveStop(props.stop, 1)
+        },
+      },
+    ]
+  : [])
+
 const menuItems = computed<DropdownMenuItem[][]>(() => [[
+  ...orderItems.value,
   {
     label: 'Move to another day',
     icon: 'i-lucide-calendar-days',
@@ -55,11 +78,19 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [[
 
 <template>
   <div
-    class="border-t border-default transition-colors first:border-t-0"
+    class="group border-t border-default transition-colors first:border-t-0"
     :class="highlighted ? 'bg-primary/10' : ''"
     data-testid="trip-stop"
   >
     <div class="flex items-center gap-3 py-3">
+      <!-- The grip shows when a mouse points at the row. On touch the whole row drags, after a press and hold. -->
+      <span
+        v-if="variant === 'day'"
+        data-drag-handle
+        class="hidden cursor-grab text-dimmed pointer-fine:group-hover:flex"
+      >
+        <UIcon name="i-lucide-grip-vertical" />
+      </span>
       <button
         type="button"
         class="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left"

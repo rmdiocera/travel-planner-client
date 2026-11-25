@@ -431,6 +431,61 @@ describe('Trip page', () => {
       })
     })
 
+    describe('order within a day', () => {
+      it('moves a stop up from its menu, at once', async () => {
+        spotsRef.value = { data: { '2027-03-13': [stop1, stop2] } }
+        clientMock.mockResolvedValue(undefined)
+        const { wrapper } = await mountTripPage()
+
+        await selectMenuItem(wrapper, 'stop-menu-btn-s2', 'Move up')
+
+        expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/t1/spots/reorder', {
+          method: 'PATCH',
+          body: { visit_date: '2027-03-13', spot_ids: ['s2', 's1'] },
+        })
+        const names = wrapper.findAll('[data-testid="trip-stop"]').map(row => row.text())
+        expect(names[0]).toContain('Place s2')
+        expect(names[1]).toContain('Place s1')
+      })
+
+      it('turns Move up off for the first stop and Move down off for the last', async () => {
+        spotsRef.value = { data: { '2027-03-13': [stop1, stop2] } }
+        const { wrapper } = await mountTripPage()
+
+        const first = menuItems(wrapper, 'stop-menu-btn-s1')
+        expect(first.find(item => item.label === 'Move up')?.disabled).toBe(true)
+        expect(first.find(item => item.label === 'Move down')?.disabled).toBe(false)
+        const last = menuItems(wrapper, 'stop-menu-btn-s2')
+        expect(last.find(item => item.label === 'Move up')?.disabled).toBe(false)
+        expect(last.find(item => item.label === 'Move down')?.disabled).toBe(true)
+      })
+
+      it('has no Move up or Move down for a stop outside the trip dates', async () => {
+        spotsRef.value = { data: { '2027-03-20': [makeSpot('s9', '2027-03-20')] } }
+        const { wrapper } = await mountTripPage()
+
+        const labels = menuItems(wrapper, 'stop-menu-btn-s9').map(item => item.label)
+        expect(labels).not.toContain('Move up')
+        expect(labels).not.toContain('Move down')
+      })
+
+      it('shows Times out of order when a day\'s times are out of order', async () => {
+        const early = makeSpot('s3', '2027-03-13', { start_time: '07:00:00', end_time: '08:00:00' })
+        spotsRef.value = { data: { '2027-03-13': [stop1, early] } }
+        const { wrapper } = await mountTripPage()
+
+        expect(wrapper.findAll('[data-testid="trip-day"]')[1]!.find('[data-testid="times-out-of-order"]').exists()).toBe(true)
+        expect(wrapper.findAll('[data-testid="times-out-of-order"]')).toHaveLength(1)
+      })
+
+      it('shows no note when the times are in order', async () => {
+        spotsRef.value = { data: { '2027-03-13': [stop1, stop2] } }
+        const { wrapper } = await mountTripPage()
+
+        expect(wrapper.find('[data-testid="times-out-of-order"]').exists()).toBe(false)
+      })
+    })
+
     it('opening one stop closes the other', async () => {
       spotsRef.value = { data: { '2027-03-13': [stop1, stop2] } }
       const { wrapper } = await mountTripPage()
