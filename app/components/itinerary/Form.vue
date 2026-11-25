@@ -38,8 +38,6 @@ const endDate = shallowRef<CalendarDate | undefined>(
 )
 const dateToday = today(getLocalTimeZone())
 
-// An end date can't be before the start, nor before today: an edit that moved a trip's end into the past
-// would make it a past trip, and Edit trip is off for those, so it couldn't be undone.
 // Stops aren't touched when a trip's dates change: they wait under "Outside the trip dates". Say so first.
 const outsideCount = computed(() => {
   const changed = form.value.start_date !== (props.selectedItinerary?.start_date ?? '')
@@ -53,6 +51,8 @@ const outsideWarning = computed(() => outsideCount.value === 1
   ? `1 place is on a day outside these dates. It'll be kept under "Outside the trip dates" so you can move it.`
   : `${outsideCount.value} places are on days outside these dates. They'll be kept under "Outside the trip dates" so you can move them.`)
 
+// An end date can't be before the start, nor before today: an edit that moved a trip's end into the past
+// would make it a past trip, and Edit trip is off for those, so it couldn't be undone.
 const endMinValue = computed(() => startDate.value && startDate.value.compare(dateToday) > 0 ? startDate.value : dateToday)
 
 const df = new DateFormatter('en-US', {

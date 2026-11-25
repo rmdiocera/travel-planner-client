@@ -129,6 +129,7 @@
       <Modal
         v-if="!isMobile"
         v-model:open="dayPickerOpen"
+        :dismissible="!isMoving"
         title="Move to another day"
         :description="dayPickerStop?.place.name"
       >
@@ -144,6 +145,7 @@
               label="Cancel"
               color="neutral"
               variant="outline"
+              :disabled="isMoving"
               @click="dayPickerOpen = false"
             />
             <UButton
@@ -160,6 +162,7 @@
       <Slideover
         v-else
         v-model:open="dayPickerOpen"
+        :dismissible="!isMoving"
         side="bottom"
         title="Move to another day"
         :description="dayPickerStop?.place.name"
@@ -276,7 +279,7 @@
             />
           </template>
         </EmptyState>
-        <TripDaysSkeleton v-else-if="daysPending" />
+        <TripDaysSkeleton v-else-if="daysInitialLoading" />
         <template v-else>
           <UAlert
             v-if="outside.length"
@@ -373,7 +376,7 @@ watch(tripData, (response) => {
 const days = useTripDays(id, trip)
 provide(tripDaysKey, days)
 // Destructured because refs nested in an object aren't unwrapped in the template.
-const { pending: daysPending, error: daysError, refresh: refreshDays, days: tripDays, outside, stopCount } = days
+const { pending: daysPending, initialLoading: daysInitialLoading, error: daysError, refresh: refreshDays, days: tripDays, outside, stopCount } = days
 
 const { width } = useWindowSize()
 const isMobile = computed(() => width.value < 768)

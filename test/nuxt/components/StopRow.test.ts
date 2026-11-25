@@ -84,11 +84,45 @@ describe('TripStopRow', () => {
       expect(fakeDays.setVisited).toHaveBeenCalledWith(stop, false)
     })
 
-    it('turns the visited button off while it saves', async () => {
+    it('marks the visited button busy while it saves, without disabling it so it keeps focus', async () => {
       fakeDays.isSaving.mockReturnValue(true)
       const wrapper = await mountRow(makeSpot('s1', '2027-03-13'), { open: true })
 
-      expect(wrapper.find('[data-testid="stop-visited-btn"]').attributes()).toHaveProperty('disabled')
+      const button = wrapper.find('[data-testid="stop-visited-btn"]')
+      expect(button.attributes('aria-disabled')).toBe('true')
+      expect(button.attributes()).not.toHaveProperty('disabled')
+    })
+  })
+
+  describe('Edit times and focus', () => {
+    async function mountOpenRow() {
+      return mountSuspended(TripStopRow, {
+        props: { stop: makeSpot('s1', '2027-03-13'), variant: 'day', open: true, isFirst: true, isLast: true },
+        global: { provide: { [tripDaysKey as symbol]: fakeDays, [tripDialogsKey as symbol]: { openDayPicker: vi.fn() } } },
+        attachTo: document.body,
+      })
+    }
+
+    it('moves focus into the Arrive field when Edit times opens', async () => {
+      const wrapper = await mountOpenRow()
+      await wrapper.find('[data-testid="stop-edit-times-btn"]').trigger('click')
+      await nextTick()
+      await nextTick()
+
+      const arrive = wrapper.find('[data-testid="times-arrive"]').element
+      expect(arrive.contains(document.activeElement)).toBe(true)
+      wrapper.unmount()
+    })
+
+    it('gives focus back to the Edit times button when it closes', async () => {
+      const wrapper = await mountOpenRow()
+      await wrapper.find('[data-testid="stop-edit-times-btn"]').trigger('click')
+      await wrapper.find('[data-testid="times-cancel-btn"]').trigger('click')
+      await nextTick()
+      await nextTick()
+
+      expect(document.activeElement).toBe(wrapper.find('[data-testid="stop-edit-times-btn"]').element)
+      wrapper.unmount()
     })
   })
 

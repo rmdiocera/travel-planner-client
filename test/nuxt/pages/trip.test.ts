@@ -21,7 +21,8 @@ const japanTrip = { id: 't1', name: 'Japan with friends', start_date: '2027-03-1
 const tripRef = ref<{ data: Record<string, string | null> } | null>({ data: japanTrip })
 const tripError = ref<Record<string, unknown> | null>(null)
 const tripPending = ref(false)
-const spotsRef = ref<{ data: Record<string, unknown[]> | [] }>({ data: [] })
+const spotsRef = ref<{ data: Record<string, unknown[]> | [] } | null>({ data: [] })
+const spotsPending = ref(false)
 const spotsError = ref<Record<string, unknown> | null>(null)
 
 mockNuxtImport('useLazySanctumFetch', () => {
@@ -30,7 +31,7 @@ mockNuxtImport('useLazySanctumFetch', () => {
     if (url === '/api/v1/itineraries/t1') {
       return { data: tripRef, pending: tripPending, error: tripError, refresh: tripRefreshMock }
     }
-    return { data: spotsRef, pending: ref(false), error: spotsError, refresh: spotsRefreshMock }
+    return { data: spotsRef, pending: spotsPending, error: spotsError, refresh: spotsRefreshMock }
   }
 })
 mockNuxtImport('useSanctumClient', () => () => clientMock)
@@ -67,6 +68,7 @@ describe('Trip page', () => {
     tripPending.value = false
     spotsRef.value = { data: [] }
     spotsError.value = null
+    spotsPending.value = false
   })
 
   afterEach(() => {
@@ -380,6 +382,25 @@ describe('Trip page', () => {
       expect(days).toHaveLength(7)
       expect(days[1]!.text()).toMatch(/^Day 2/)
       expect(days[1]!.text()).toContain('Sat 13 Mar')
+    })
+
+    it('shows the skeleton while the days load for the first time', async () => {
+      spotsRef.value = null
+      spotsPending.value = true
+      const { wrapper } = await mountTripPage()
+
+      expect(wrapper.find('[data-testid="days-skeleton"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="trip-name"]').exists()).toBe(true)
+    })
+
+    it('keeps the days on screen while they reload', async () => {
+      spotsRef.value = { data: { '2027-03-13': [stop1] } }
+      spotsPending.value = true
+      const { wrapper } = await mountTripPage()
+
+      expect(wrapper.find('[data-testid="days-skeleton"]').exists()).toBe(false)
+      expect(wrapper.findAll('[data-testid="trip-day"]')).toHaveLength(7)
+      expect(wrapper.text()).toContain('Place s1')
     })
 
     it('says Nothing planned yet on an empty day', async () => {

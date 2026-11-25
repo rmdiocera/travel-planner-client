@@ -29,6 +29,14 @@ const dialogs = injectTripDialogs()
 
 // Edit times shows Arrive and Leave in the opened row, in place of its buttons.
 const editingTimes = ref(false)
+const rowEl = useTemplateRef<HTMLElement>('rowEl')
+
+// The editor's buttons go away when it closes, so focus goes back to the Edit times button.
+async function closeTimesEditor() {
+  editingTimes.value = false
+  await nextTick()
+  rowEl.value?.querySelector<HTMLElement>('[data-testid="stop-edit-times-btn"]')?.focus()
+}
 watch(() => props.open, (open) => {
   if (!open) {
     editingTimes.value = false
@@ -78,6 +86,7 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [[
 
 <template>
   <div
+    ref="rowEl"
     class="group border-t border-default transition-colors first:border-t-0"
     :class="highlighted ? 'bg-primary/10' : ''"
     data-testid="trip-stop"
@@ -163,7 +172,7 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [[
         v-if="editingTimes"
         :stop="stop"
         class="w-full"
-        @close="editingTimes = false"
+        @close="closeTimesEditor"
       />
       <UButton
         v-if="!editingTimes"
@@ -171,7 +180,7 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [[
         icon="i-lucide-check"
         variant="outline"
         size="sm"
-        :disabled="days.isSaving(stop.id)"
+        :aria-disabled="days.isSaving(stop.id) ? 'true' : undefined"
         data-testid="stop-visited-btn"
         @click="days.setVisited(stop, !stop.marked_visited)"
       />

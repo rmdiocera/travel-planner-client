@@ -31,6 +31,9 @@ export function useTripDays(itineraryId: string, trip: Ref<Itinerary | null>) {
     return { ...day, stops, outOfOrder: timesOutOfOrder(stops) }
   }))
   const outside = computed(() => spotsOutside(tripDays.value, byDate.value))
+  // The skeleton is for the first load only. A refresh also sets pending, and swapping every day for a skeleton
+  // then would lose the scroll position and focus after each move or time change.
+  const initialLoading = computed(() => pending.value && !data.value)
   const stopCount = computed(() => Object.values(byDate.value).reduce((count, stops) => count + stops.length, 0))
 
   // Ids with a change in flight: a stop's id for visited, a day's date for a reorder.
@@ -57,6 +60,12 @@ export function useTripDays(itineraryId: string, trip: Ref<Itinerary | null>) {
   function replaceStop(changed: Spot) {
     const date = dayOf(changed)
     byDate.value = { ...byDate.value, [date]: (byDate.value[date] ?? []).map(stop => stop.id === changed.id ? { ...stop, ...changed } : stop) }
+  }
+
+  // Changes only the visited mark, so putting it back can't bring back an older copy of the stop's times.
+  function setMarkedVisited(stop: Spot, visited: boolean) {
+    const date = dayOf(stop)
+    byDate.value = { ...byDate.value, [date]: (byDate.value[date] ?? []).map(other => other.id === stop.id ? { ...other, marked_visited: visited } : other) }
   }
 
   function showError() {
@@ -118,7 +127,7 @@ export function useTripDays(itineraryId: string, trip: Ref<Itinerary | null>) {
     }
 
     setSaving(stop.id, true)
-    replaceStop({ ...stop, marked_visited: visited })
+    setMarkedVisited(stop, visited)
     try {
       await client<SpotResponse>(`${spotsUrl}/${stop.id}`, {
         method: 'PATCH',
@@ -126,7 +135,7 @@ export function useTripDays(itineraryId: string, trip: Ref<Itinerary | null>) {
       })
     }
     catch {
-      replaceStop({ ...stop, marked_visited: !visited })
+      setMarkedVisited(stop, !visited)
       showError()
     }
     finally {
@@ -193,7 +202,7 @@ export function useTripDays(itineraryId: string, trip: Ref<Itinerary | null>) {
       .map(day => day.number)
   }
 
-  return { pending, error, refresh, days, outside, stopCount, addStop, removeStop, setTimes, setVisited, moveToDay, reorderDay, moveStop, isSaving, daysWithPlace }
+  return { pending, initialLoading, error, refresh, days, outside, stopCount, addStop, removeStop, setTimes, setVisited, moveToDay, reorderDay, moveStop, isSaving, daysWithPlace }
 }
 
 export type TripDays = ReturnType<typeof useTripDays>

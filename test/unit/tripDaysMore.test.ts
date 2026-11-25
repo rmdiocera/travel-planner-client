@@ -29,6 +29,7 @@ describe('websiteHref', () => {
   it('adds https:// to a bare domain and keeps a full URL', () => {
     expect(websiteHref('osakacastle.net')).toBe('https://osakacastle.net')
     expect(websiteHref('http://a.jp')).toBe('http://a.jp')
+    expect(websiteHref('HTTPS://A.JP')).toBe('HTTPS://A.JP')
   })
 })
 
