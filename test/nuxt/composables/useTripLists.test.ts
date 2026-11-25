@@ -151,6 +151,171 @@ describe('useTripLists: lists', () => {
     expect(clientMock).not.toHaveBeenCalled()
   })
 
+  describe('items', () => {
+    const ITEMS = `${URL}/l1/items`
+    const note = { id: 'n1', itinerary_lists_id: 'l1', type: 'note' as const, title: null, content: 'Existing', sort_order: 1, place: null, checklist_items: [] }
+    const placeItem = { ...note, id: 'i2', type: 'place' as const, content: null, sort_order: 2 }
+
+    beforeEach(() => {
+      listsRef.value = { data: [makeList('l1', 'Before we go', { items: [note, placeItem] })] }
+    })
+
+    it('adds a place item at the end', async () => {
+      clientMock.mockResolvedValue({ data: { id: 'i3', itinerary_lists_id: 'l1', type: 'place', title: null, content: null, sort_order: 3, place: { id: 'lp1', place_id: 'p1', place: { id: 'p1', name: 'Tsukiji' }, start_time: null, end_time: null, marked_visited: false } } })
+      const { lists, addPlace } = useTripLists('t1')
+
+      const created = await addPlace(lists.value[0]!, 'p1')
+
+      expect(clientMock).toHaveBeenCalledWith(ITEMS, { method: 'POST', body: { type: 'place', place_id: 'p1' } })
+      expect(created?.id).toBe('i3')
+      expect(lists.value[0]!.items.map(item => item.id)).toEqual(['n1', 'i2', 'i3'])
+      expect(lists.value[0]!.items[2]!.checklist_items).toEqual([])
+    })
+
+    it('creates a note with two requests', async () => {
+      clientMock
+        .mockResolvedValueOnce({ data: { id: 'n9', itinerary_lists_id: 'l1', type: 'note', content: null, sort_order: 3 } })
+        .mockResolvedValueOnce({ data: { id: 'n9', itinerary_lists_id: 'l1', type: 'note', content: 'Bring an umbrella', sort_order: 3 } })
+      const { lists, createNote } = useTripLists('t1')
+
+      expect(await createNote(lists.value[0]!, 'Bring an umbrella')).toEqual({ ok: true })
+
+      expect(clientMock).toHaveBeenNthCalledWith(1, ITEMS, { method: 'POST', body: { type: 'note' } })
+      expect(clientMock).toHaveBeenNthCalledWith(2, `${ITEMS}/n9`, { method: 'PATCH', body: { type: 'note', content: 'Bring an umbrella' } })
+      const created = lists.value[0]!.items[2]!
+      expect(created.content).toBe('Bring an umbrella')
+      expect(created.place).toBeNull()
+      expect(created.checklist_items).toEqual([])
+    })
+
+    it('keeps the created note to retry only its text', async () => {
+      clientMock
+        .mockResolvedValueOnce({ data: { id: 'n9', itinerary_lists_id: 'l1', type: 'note', content: null, sort_order: 3 } })
+        .mockRejectedValueOnce(new Error('Network Error'))
+        .mockResolvedValueOnce({ data: { id: 'n9', itinerary_lists_id: 'l1', type: 'note', content: 'Hello', sort_order: 3 } })
+      const { lists, createNote } = useTripLists('t1')
+
+      expect(await createNote(lists.value[0]!, 'Hello')).toEqual({ ok: false })
+      expect(lists.value[0]!.items).toHaveLength(2)
+
+      expect(await createNote(lists.value[0]!, 'Hello')).toEqual({ ok: true })
+      expect(clientMock).toHaveBeenCalledTimes(3)
+      expect(clientMock).toHaveBeenNthCalledWith(3, `${ITEMS}/n9`, { method: 'PATCH', body: { type: 'note', content: 'Hello' } })
+      expect(lists.value[0]!.items).toHaveLength(3)
+    })
+
+    it('deletes the empty note when a failed new note is cancelled', async () => {
+      clientMock
+        .mockResolvedValueOnce({ data: { id: 'n9', itinerary_lists_id: 'l1', type: 'note', content: null, sort_order: 3 } })
+        .mockRejectedValueOnce(new Error('Network Error'))
+        .mockResolvedValueOnce(undefined)
+      const { lists, createNote, discardNoteDraft } = useTripLists('t1')
+      await createNote(lists.value[0]!, 'Hello')
+
+      await discardNoteDraft(lists.value[0]!)
+
+      expect(clientMock).toHaveBeenNthCalledWith(3, `${ITEMS}/n9`, { method: 'DELETE' })
+    })
+
+    it('does nothing to discard when no note was started', async () => {
+      const { lists, discardNoteDraft } = useTripLists('t1')
+
+      await discardNoteDraft(lists.value[0]!)
+
+      expect(clientMock).not.toHaveBeenCalled()
+    })
+
+    it('updates a note and keeps it where it is', async () => {
+      clientMock.mockResolvedValue({ data: { id: 'n1', itinerary_lists_id: 'l1', type: 'note', content: 'Changed', sort_order: 1 } })
+      const { lists, updateNote } = useTripLists('t1')
+
+      expect(await updateNote(lists.value[0]!, lists.value[0]!.items[0]!, 'Changed')).toEqual({ ok: true })
+
+      expect(clientMock).toHaveBeenCalledWith(`${ITEMS}/n1`, { method: 'PATCH', body: { type: 'note', content: 'Changed' } })
+      expect(lists.value[0]!.items[0]!.content).toBe('Changed')
+      expect(lists.value[0]!.items.map(item => item.id)).toEqual(['n1', 'i2'])
+    })
+
+    it('creates a checklist, then sets its title', async () => {
+      clientMock
+        .mockResolvedValueOnce({ data: { id: 'c9', itinerary_lists_id: 'l1', type: 'checklist', title: null, sort_order: 3 } })
+        .mockResolvedValueOnce({ data: { id: 'c9', itinerary_lists_id: 'l1', type: 'checklist', title: 'Packing', sort_order: 3 } })
+      const { lists, createChecklist } = useTripLists('t1')
+
+      const created = await createChecklist(lists.value[0]!, 'Packing')
+
+      expect(clientMock).toHaveBeenNthCalledWith(1, ITEMS, { method: 'POST', body: { type: 'checklist' } })
+      expect(clientMock).toHaveBeenNthCalledWith(2, `${ITEMS}/c9`, { method: 'PATCH', body: { type: 'checklist', title: 'Packing' } })
+      expect(created?.id).toBe('c9')
+      expect(lists.value[0]!.items[2]!.title).toBe('Packing')
+      expect(lists.value[0]!.items[2]!.checklist_items).toEqual([])
+    })
+
+    it('creates a checklist without a title in one request', async () => {
+      clientMock.mockResolvedValue({ data: { id: 'c9', itinerary_lists_id: 'l1', type: 'checklist', title: null, sort_order: 3 } })
+      const { lists, createChecklist } = useTripLists('t1')
+
+      await createChecklist(lists.value[0]!, null)
+
+      expect(clientMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('clears a checklist title with null', async () => {
+      const checklist = { ...note, id: 'c1', type: 'checklist' as const, title: 'Packing', content: null }
+      listsRef.value = { data: [makeList('l1', 'Before we go', { items: [checklist] })] }
+      clientMock.mockResolvedValue({ data: { id: 'c1', itinerary_lists_id: 'l1', type: 'checklist', title: null, sort_order: 1 } })
+      const { lists, setChecklistTitle } = useTripLists('t1')
+
+      await setChecklistTitle(lists.value[0]!, lists.value[0]!.items[0]!, null)
+
+      expect(clientMock).toHaveBeenCalledWith(`${ITEMS}/c1`, { method: 'PATCH', body: { type: 'checklist', title: null } })
+      expect(lists.value[0]!.items[0]!.title).toBeNull()
+    })
+
+    it('reorders items with list_item_ids', async () => {
+      clientMock.mockResolvedValue(undefined)
+      const { lists, reorderItems } = useTripLists('t1')
+
+      const saving = reorderItems(lists.value[0]!, ['i2', 'n1'])
+      expect(lists.value[0]!.items.map(item => item.id)).toEqual(['i2', 'n1'])
+      await saving
+
+      expect(clientMock).toHaveBeenCalledWith(`${ITEMS}/reorder`, { method: 'PATCH', body: { list_item_ids: ['i2', 'n1'] } })
+    })
+
+    it('reloads the lists when reordering items fails', async () => {
+      clientMock.mockRejectedValue(new Error('Network Error'))
+      const { lists, reorderItems } = useTripLists('t1')
+
+      await reorderItems(lists.value[0]!, ['i2', 'n1'])
+
+      expect(refreshMock).toHaveBeenCalled()
+      expect(toastAddMock).toHaveBeenCalledWith(ERROR_TOAST)
+    })
+
+    it('moves an item up, and not past the start', async () => {
+      clientMock.mockResolvedValue(undefined)
+      const { lists, moveItem } = useTripLists('t1')
+
+      await moveItem(lists.value[0]!, lists.value[0]!.items[1]!, -1)
+      expect(clientMock).toHaveBeenCalledWith(`${ITEMS}/reorder`, { method: 'PATCH', body: { list_item_ids: ['i2', 'n1'] } })
+
+      clientMock.mockClear()
+      await moveItem(lists.value[0]!, lists.value[0]!.items[0]!, -1)
+      expect(clientMock).not.toHaveBeenCalled()
+    })
+
+    it('deletes an item after the API confirms', async () => {
+      clientMock.mockResolvedValue(undefined)
+      const { lists, deleteItem } = useTripLists('t1')
+
+      expect(await deleteItem(lists.value[0]!, lists.value[0]!.items[0]!)).toBe(true)
+
+      expect(clientMock).toHaveBeenCalledWith(`${ITEMS}/n1`, { method: 'DELETE' })
+      expect(lists.value[0]!.items.map(item => item.id)).toEqual(['i2'])
+    })
+  })
+
   it('throws when it was not provided', () => {
     expect(() => injectTripLists()).toThrow('useTripLists was not provided')
   })
