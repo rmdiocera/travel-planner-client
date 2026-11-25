@@ -194,7 +194,7 @@
             :ui="{ root: 'items-center' }"
           >
             <template #title>
-              This will permanently delete <strong>{{ trip?.name }}</strong>{{ tripDeleteTail(stopCount, 0) }}. This cannot be undone.
+              This will permanently delete <strong>{{ trip?.name }}</strong>{{ tripDeleteTail(stopCount, listCount) }}. This cannot be undone.
             </template>
           </UAlert>
         </template>
@@ -259,72 +259,117 @@
           @edit="editOpen = true"
           @delete="confirmOpen = true"
         />
-        <EmptyState
-          v-if="daysError"
-          icon="i-lucide-triangle-alert"
-          title="Your days couldn't be loaded"
-          description="Check your connection and try again."
-          :ui="{ avatar: '[&>[data-slot=icon]]:text-error bg-error/10 rounded-xl' }"
+        <!-- Days and lists sit side by side from 1024px. Below that they are tabs. Both panels are always rendered
+             and CSS shows one, so server rendering and hydration agree whatever the window width. -->
+        <div
+          class="sticky top-0 z-10 flex gap-1 border-b border-default bg-default lg:hidden"
+          role="tablist"
+          aria-label="Days and lists"
+          data-testid="trip-tabs"
         >
-          <template #action>
-            <UButton
-              label="Try again"
-              color="neutral"
-              variant="outline"
-              icon="i-lucide-refresh-cw"
-              @click="refreshDays()"
-            />
-          </template>
-        </EmptyState>
-        <TripDaysSkeleton v-else-if="daysPending" />
-        <template v-else>
-          <UAlert
-            v-if="outside.length"
-            color="warning"
-            variant="soft"
-            icon="i-lucide-triangle-alert"
-            :title="outsideNotice"
-            :actions="[{ label: 'Show them', color: 'neutral', variant: 'outline', onClick: showOutside }]"
-            data-testid="outside-notice"
-          />
-          <EmptyState
-            v-if="!hasDates"
-            icon="i-lucide-calendar-x"
-            title="No dates yet"
-            description="Add the trip's dates to plan what you'll do each day."
+          <button
+            v-for="tab in tabs"
+            :id="`tab-${tab.value}`"
+            :key="tab.value"
+            type="button"
+            role="tab"
+            :aria-selected="activeTab === tab.value ? 'true' : 'false'"
+            :aria-controls="`panel-${tab.value}`"
+            class="-mb-px cursor-pointer border-b-2 px-4 py-2 text-sm font-medium"
+            :class="activeTab === tab.value ? 'border-primary text-primary' : 'border-transparent text-muted'"
+            :data-testid="`trip-tab-${tab.value}`"
+            @click="activeTab = tab.value"
           >
-            <template #action>
-              <UButton
-                label="Add dates"
-                color="primary"
-                icon="i-lucide-calendar"
-                data-testid="add-dates-btn"
-                @click="editOpen = true"
+            {{ tab.label }}
+          </button>
+        </div>
+        <div class="grid gap-6 lg:grid-cols-[1.55fr_1fr]">
+          <div
+            id="panel-days"
+            role="tabpanel"
+            aria-labelledby="tab-days"
+            class="space-y-6"
+            :class="activeTab === 'days' ? '' : 'hidden lg:block'"
+            data-testid="days-panel"
+          >
+            <EmptyState
+              v-if="daysError"
+              icon="i-lucide-triangle-alert"
+              title="Your days couldn't be loaded"
+              description="Check your connection and try again. Your lists are still here."
+              :ui="{ avatar: '[&>[data-slot=icon]]:text-error bg-error/10 rounded-xl' }"
+            >
+              <template #action>
+                <UButton
+                  label="Try again"
+                  color="neutral"
+                  variant="outline"
+                  icon="i-lucide-refresh-cw"
+                  @click="refreshDays()"
+                />
+              </template>
+            </EmptyState>
+            <TripDaysSkeleton v-else-if="daysPending" />
+            <template v-else>
+              <UAlert
+                v-if="outside.length"
+                color="warning"
+                variant="soft"
+                icon="i-lucide-triangle-alert"
+                :title="outsideNotice"
+                :actions="[{ label: 'Show them', color: 'neutral', variant: 'outline', onClick: showOutside }]"
+                data-testid="outside-notice"
+              />
+              <EmptyState
+                v-if="!hasDates"
+                icon="i-lucide-calendar-x"
+                title="No dates yet"
+                description="Add the trip's dates to plan what you'll do each day. Until then, you can keep places in lists."
+              >
+                <template #action>
+                  <UButton
+                    label="Add dates"
+                    color="primary"
+                    icon="i-lucide-calendar"
+                    data-testid="add-dates-btn"
+                    @click="editOpen = true"
+                  />
+                </template>
+              </EmptyState>
+              <div
+                v-else
+                class="flex flex-col gap-4"
+              >
+                <TripDayCard
+                  v-for="day in tripDays"
+                  :key="day.date"
+                  :day="day"
+                  :is-today="day.date === today"
+                  :highlighted-ids="highlightedIds"
+                  :open-stop-id="openStopId"
+                  @add-place="openSearch"
+                  @toggle-stop="toggleStop"
+                />
+              </div>
+              <TripOutsideSection
+                v-if="outside.length"
+                :stops="outside"
+                :open-stop-id="openStopId"
+                @toggle-stop="toggleStop"
               />
             </template>
-          </EmptyState>
-          <div
-            v-else
-            class="flex flex-col gap-4"
-          >
-            <TripDayCard
-              v-for="day in tripDays"
-              :key="day.date"
-              :day="day"
-              :is-today="day.date === today"
-              :highlighted-ids="highlightedIds"
-              :open-stop-id="openStopId"
-              @add-place="openSearch"
-              @toggle-stop="toggleStop"
-            />
           </div>
-          <TripOutsideSection
-            v-if="outside.length"
-            :stops="outside"
-            :open-stop-id="openStopId"
-            @toggle-stop="toggleStop"
-          />
-        </template>
+          <div
+            id="panel-lists"
+            role="tabpanel"
+            aria-labelledby="tab-lists"
+            class="lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:self-start lg:overflow-y-auto"
+            :class="activeTab === 'lists' ? '' : 'hidden lg:block'"
+            data-testid="lists-panel"
+          >
+            <TripListsColumn />
+          </div>
+        </div>
       </template>
     </div>
   </NuxtLayout>
@@ -340,12 +385,14 @@ import TripDaysSkeleton from '~/components/trip/DaysSkeleton.vue'
 import TripDayCard from '~/components/trip/DayCard.vue'
 import TripDayPicker from '~/components/trip/DayPicker.vue'
 import TripHeader from '~/components/trip/Header.vue'
+import TripListsColumn from '~/components/trip/ListsColumn.vue'
 import TripOutsideSection from '~/components/trip/OutsideSection.vue'
 import TripPlaceSearch from '~/components/trip/PlaceSearch.vue'
 import { useWindowSize } from '@vueuse/core'
 import { tripDialogsKey } from '~/composables/tripDialogs'
 import type { DayPickerRequest } from '~/composables/tripDialogs'
 import { tripDaysKey, useTripDays } from '~/composables/useTripDays'
+import { tripListsKey, useTripLists } from '~/composables/useTripLists'
 import type { Itinerary, ItineraryResponse } from '~/types/itinerary'
 import type { SearchPlace } from '~/composables/usePlaceSearch'
 import type { Spot } from '~/types/spot'
@@ -372,6 +419,13 @@ watch(tripData, (response) => {
 
 const days = useTripDays(id, trip)
 provide(tripDaysKey, days)
+const lists = useTripLists(id)
+provide(tripListsKey, lists)
+const { listCount } = lists
+
+// Below 1024px the days and the lists are tabs.
+const tabs = [{ value: 'days', label: 'Days' }, { value: 'lists', label: 'Lists' }] as const
+const activeTab = ref<'days' | 'lists'>('days')
 // Destructured because refs nested in an object aren't unwrapped in the template.
 const { pending: daysPending, error: daysError, refresh: refreshDays, days: tripDays, outside, stopCount } = days
 

@@ -8,12 +8,13 @@ import { makeSpot } from '../../utils/tripFixtures'
 
 const widthRef = ref(1024)
 
-const { clientMock, lazyFetchMock, toastAddMock, tripRefreshMock, spotsRefreshMock, navigateToMock } = vi.hoisted(() => ({
+const { clientMock, lazyFetchMock, toastAddMock, tripRefreshMock, spotsRefreshMock, listsRefreshMock, navigateToMock } = vi.hoisted(() => ({
   clientMock: vi.fn(),
   lazyFetchMock: vi.fn(),
   toastAddMock: vi.fn(),
   tripRefreshMock: vi.fn(),
   spotsRefreshMock: vi.fn(),
+  listsRefreshMock: vi.fn(),
   navigateToMock: vi.fn(),
 }))
 
@@ -23,12 +24,17 @@ const tripError = ref<Record<string, unknown> | null>(null)
 const tripPending = ref(false)
 const spotsRef = ref<{ data: Record<string, unknown[]> | [] }>({ data: [] })
 const spotsError = ref<Record<string, unknown> | null>(null)
+const listsRef = ref<{ data: Record<string, unknown>[] }>({ data: [] })
+const listsError = ref<Record<string, unknown> | null>(null)
 
 mockNuxtImport('useLazySanctumFetch', () => {
   return (url: string, options?: Record<string, unknown>) => {
     lazyFetchMock(url, options)
     if (url === '/api/v1/itineraries/t1') {
       return { data: tripRef, pending: tripPending, error: tripError, refresh: tripRefreshMock }
+    }
+    if (url === '/api/v1/itineraries/t1/lists') {
+      return { data: listsRef, pending: ref(false), error: listsError, refresh: listsRefreshMock }
     }
     return { data: spotsRef, pending: ref(false), error: spotsError, refresh: spotsRefreshMock }
   }
@@ -59,7 +65,7 @@ describe('Trip page', () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2027-03-01T12:00:00'))
     widthRef.value = 1024
-    for (const mock of [clientMock, lazyFetchMock, toastAddMock, tripRefreshMock, spotsRefreshMock, navigateToMock]) {
+    for (const mock of [clientMock, lazyFetchMock, toastAddMock, tripRefreshMock, spotsRefreshMock, listsRefreshMock, navigateToMock]) {
       mock.mockReset()
     }
     tripRef.value = { data: japanTrip }
@@ -67,6 +73,8 @@ describe('Trip page', () => {
     tripPending.value = false
     spotsRef.value = { data: [] }
     spotsError.value = null
+    listsRef.value = { data: [] }
+    listsError.value = null
   })
 
   afterEach(() => {
@@ -361,6 +369,194 @@ describe('Trip page', () => {
       await flushPromises()
 
       expect(toastAddMock).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Lists', () => {
+    const listItem = (id: string, type: 'place' | 'checklist' | 'note') => ({
+      id,
+      itinerary_lists_id: 'l1',
+      type,
+      title: null,
+      content: null,
+      sort_order: 1,
+      place: null,
+      checklist_items: [],
+    })
+    const beforeWeGo = {
+      id: 'l1',
+      itinerary_id: 't1',
+      name: 'Before we go',
+      sort_order: 1,
+      items: [listItem('c1', 'checklist'), listItem('c2', 'checklist'), listItem('n1', 'note')],
+    }
+    const food = { ...beforeWeGo, id: 'l2', name: 'Food', sort_order: 2, items: [] }
+
+    describe('layout', () => {
+      it('puts days and lists side by side from 1024px, with tabs below', async () => {
+        const { wrapper } = await mountTripPage()
+
+        expect(wrapper.find('[data-testid="trip-tabs"]').classes()).toContain('lg:hidden')
+        const days = wrapper.find('[data-testid="days-panel"]')
+        const lists = wrapper.find('[data-testid="lists-panel"]')
+        expect(days.classes()).not.toContain('hidden')
+        expect(lists.classes()).toContain('hidden')
+        expect(lists.classes()).toContain('lg:block')
+
+        await wrapper.find('[data-testid="trip-tab-lists"]').trigger('click')
+        expect(days.classes()).toContain('hidden')
+        expect(days.classes()).toContain('lg:block')
+        expect(lists.classes()).not.toContain('hidden')
+      })
+
+      it('marks the tabs and panels for assistive technology', async () => {
+        const { wrapper } = await mountTripPage()
+
+        expect(wrapper.find('[data-testid="trip-tab-days"]').attributes('role')).toBe('tab')
+        expect(wrapper.find('[data-testid="trip-tab-days"]').attributes('aria-selected')).toBe('true')
+        expect(wrapper.find('[data-testid="trip-tab-lists"]').attributes('aria-selected')).toBe('false')
+        expect(wrapper.find('[data-testid="days-panel"]').attributes('role')).toBe('tabpanel')
+        expect(wrapper.find('[data-testid="lists-panel"]').attributes('role')).toBe('tabpanel')
+      })
+    })
+
+    it('shows No lists yet with New list for a new trip', async () => {
+      const { wrapper } = await mountTripPage()
+
+      expect(wrapper.text()).toContain('No lists yet')
+      expect(wrapper.text()).toContain('Keep places you\'re considering, notes and checklists here. For example, backup places in case one is closed, or things to pack.')
+      expect(wrapper.find('[data-testid="new-list-btn"]').exists()).toBe(true)
+    })
+
+    describe('creating a list', () => {
+      async function openNameBox() {
+        const mounted = await mountTripPage()
+        await mounted.wrapper.find('[data-testid="new-list-btn"]').trigger('click')
+        return mounted
+      }
+
+      it('creates a list from the name box, with its three add buttons', async () => {
+        clientMock.mockResolvedValue({ data: { id: 'l1', itinerary_id: 't1', name: 'Before we go', sort_order: 1 } })
+        const { wrapper } = await openNameBox()
+
+        expect(wrapper.text()).toContain('Name the list, like "Food to try" or "Packing".')
+        await wrapper.find('input[data-testid="list-name-input"]').setValue('Before we go')
+        await wrapper.find('[data-testid="list-name-save-btn"]').trigger('click')
+        await flushPromises()
+
+        expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/t1/lists', { method: 'POST', body: { name: 'Before we go' } })
+        const card = wrapper.find('[data-testid="list-card"]')
+        expect(card.text()).toContain('Before we go')
+        expect(card.find('[data-testid="list-add-place-btn"]').exists()).toBe(true)
+        expect(card.find('[data-testid="list-add-note-btn"]').exists()).toBe(true)
+        expect(card.find('[data-testid="list-add-checklist-btn"]').exists()).toBe(true)
+        // New list sits after the last list.
+        const order = wrapper.findAll('[data-testid="list-card"], [data-testid="new-list-btn"]').map(el => el.attributes('data-testid'))
+        expect(order).toEqual(['list-card', 'new-list-btn'])
+      })
+
+      it('keeps Save off while the name is blank', async () => {
+        const { wrapper } = await openNameBox()
+
+        expect(wrapper.find('[data-testid="list-name-save-btn"]').attributes()).toHaveProperty('disabled')
+        await wrapper.find('input[data-testid="list-name-input"]').setValue('   ')
+        expect(wrapper.find('[data-testid="list-name-save-btn"]').attributes()).toHaveProperty('disabled')
+      })
+
+      it('shows the API\'s message under the name box', async () => {
+        clientMock.mockRejectedValue({ statusCode: 422, data: { errors: { name: ['The name field must not be greater than 255 characters.'] } } })
+        const { wrapper } = await openNameBox()
+        await wrapper.find('input[data-testid="list-name-input"]').setValue('x')
+        await wrapper.find('[data-testid="list-name-save-btn"]').trigger('click')
+        await flushPromises()
+
+        expect(wrapper.text()).toContain('The name field must not be greater than 255 characters.')
+        expect(toastAddMock).not.toHaveBeenCalled()
+      })
+
+      it('drops the name box on Cancel', async () => {
+        const { wrapper } = await openNameBox()
+        await wrapper.find('[data-testid="list-name-cancel-btn"]').trigger('click')
+
+        expect(wrapper.find('input[data-testid="list-name-input"]').exists()).toBe(false)
+        expect(clientMock).not.toHaveBeenCalled()
+      })
+    })
+
+    describe('with lists', () => {
+      beforeEach(() => {
+        listsRef.value = { data: [beforeWeGo, food] }
+      })
+
+      it('renames a list in place', async () => {
+        clientMock.mockResolvedValue({ data: { id: 'l1', itinerary_id: 't1', name: 'Pack list', sort_order: 1 } })
+        const { wrapper } = await mountTripPage()
+        await selectMenuItem(wrapper, 'list-menu-btn-l1', 'Rename')
+
+        const input = wrapper.find('input[data-testid="list-name-input"]')
+        expect((input.element as HTMLInputElement).value).toBe('Before we go')
+        await input.setValue('Pack list')
+        await wrapper.find('[data-testid="list-name-save-btn"]').trigger('click')
+        await flushPromises()
+
+        expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/t1/lists/l1', { method: 'PATCH', body: { name: 'Pack list' } })
+        expect(wrapper.text()).toContain('Pack list')
+      })
+
+      it('asks before deleting a list, with what goes with it', async () => {
+        clientMock.mockResolvedValue(undefined)
+        const { wrapper, bodyWrapper } = await mountTripPage()
+        await selectMenuItem(wrapper, 'list-menu-btn-l1', 'Delete list')
+
+        expect(bodyWrapper.text()).toContain('Delete "Before we go"?')
+        expect(bodyWrapper.text()).toContain('Its 2 checklists and 1 note will be deleted too. This can\'t be undone.')
+        await bodyWrapper.find('[data-testid="delete-list-btn"]').trigger('click')
+        await flushPromises()
+
+        expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/t1/lists/l1', { method: 'DELETE' })
+        expect(wrapper.findAll('[data-testid="list-card"]')).toHaveLength(1)
+      })
+
+      it('turns Move up off for the first list and Move down off for the last', async () => {
+        const { wrapper } = await mountTripPage()
+
+        const first = menuItems(wrapper, 'list-menu-btn-l1')
+        expect(first.find(item => item.label === 'Move up')?.disabled).toBe(true)
+        expect(first.find(item => item.label === 'Move down')?.disabled).toBe(false)
+        const last = menuItems(wrapper, 'list-menu-btn-l2')
+        expect(last.find(item => item.label === 'Move down')?.disabled).toBe(true)
+      })
+
+      it('moves a list down at once and sends every list id', async () => {
+        clientMock.mockResolvedValue(undefined)
+        const { wrapper } = await mountTripPage()
+        await selectMenuItem(wrapper, 'list-menu-btn-l1', 'Move down')
+
+        expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/t1/lists/reorder', { method: 'PATCH', body: { list_ids: ['l2', 'l1'] } })
+        expect(wrapper.findAll('[data-testid="list-card"]')[0]!.text()).toContain('Food')
+      })
+
+      it('counts the lists in Delete trip', async () => {
+        spotsRef.value = { data: { '2027-03-13': [makeSpot('s1', '2027-03-13'), makeSpot('s2', '2027-03-13')] } }
+        listsRef.value = { data: [beforeWeGo] }
+        const { wrapper, bodyWrapper } = await mountTripPage()
+        await selectMenuItem(wrapper, 'trip-menu-btn', 'Delete trip')
+
+        expect(bodyWrapper.text()).toContain('its 2 places on days and its 1 list. This cannot be undone.')
+      })
+    })
+
+    it('shows the lists\' own error with Try again when only the lists fail', async () => {
+      listsError.value = { statusCode: 500 }
+      const { wrapper } = await mountTripPage()
+
+      expect(wrapper.text()).toContain('Your lists couldn\'t be loaded')
+      expect(wrapper.text()).toContain('Check your connection and try again. Your days are still here.')
+      expect(wrapper.findAll('[data-testid="trip-day"]').length).toBeGreaterThan(0)
+
+      await wrapper.find('[data-testid="lists-panel"]').findAll('button').find(button => button.text() === 'Try again')!.trigger('click')
+      expect(listsRefreshMock).toHaveBeenCalled()
+      expect(spotsRefreshMock).not.toHaveBeenCalled()
     })
   })
 
