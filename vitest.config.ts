@@ -22,6 +22,8 @@ export default defineConfig({
           environment: 'node',
           env: loadE2eEnv(),
           globalSetup: ['test/e2e/globalSetup.ts'],
+          // Some files count the user's trips or places, so a file that creates both can't run beside them.
+          fileParallelism: false,
           hookTimeout: 30000,
           testTimeout: 30000,
         },

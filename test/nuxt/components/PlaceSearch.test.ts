@@ -136,6 +136,13 @@ describe('TripPlaceSearch', () => {
     expect(wrapper.find('[data-testid="add-result-p1"]').attributes()).not.toHaveProperty('disabled')
   })
 
+  it('uses the words it is given for a place already there', async () => {
+    const wrapper = await mountSearch({ isOnTarget: (placeId: string) => placeId === 'p1', onTargetLabel: 'Already in this list' })
+    await search(wrapper, 'ame')
+
+    expect(wrapper.find('[data-testid="search-result-p1"]').text()).toContain('Already in this list')
+  })
+
   it('says when no places match', async () => {
     clientMock.mockResolvedValue({ data: [] })
     const wrapper = await mountSearch()
