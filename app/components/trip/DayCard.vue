@@ -8,10 +8,13 @@ defineProps<{
   isToday: boolean
   // Stops lit for a moment after they were added.
   highlightedIds?: string[]
+  // The stop opened in the days column, if any: opening one closes the other.
+  openStopId?: string | null
 }>()
 
 defineEmits<{
   addPlace: [day: TripDayWithStops]
+  toggleStop: [id: string]
 }>()
 </script>
 
@@ -40,11 +43,15 @@ defineEmits<{
     </p>
     <div v-else>
       <TripStopRow
-        v-for="stop in day.stops"
+        v-for="(stop, index) in day.stops"
         :key="stop.id"
         :stop="stop"
         variant="day"
         :highlighted="highlightedIds?.includes(stop.id)"
+        :open="openStopId === stop.id"
+        :is-first="index === 0"
+        :is-last="index === day.stops.length - 1"
+        @toggle="$emit('toggleStop', stop.id)"
       />
     </div>
     <UButton

@@ -255,12 +255,16 @@
               :day="day"
               :is-today="day.date === today"
               :highlighted-ids="highlightedIds"
+              :open-stop-id="openStopId"
               @add-place="openSearch"
+              @toggle-stop="toggleStop"
             />
           </div>
           <TripOutsideSection
             v-if="outside.length"
             :stops="outside"
+            :open-stop-id="openStopId"
+            @toggle-stop="toggleStop"
           />
         </template>
       </template>
@@ -402,6 +406,12 @@ watch(searchOpen, (open) => {
     highlightedIds.value = []
   }, 2000)
 })
+
+// One stop is open at a time in the days column.
+const openStopId = ref<string | null>(null)
+function toggleStop(id: string) {
+  openStopId.value = openStopId.value === id ? null : id
+}
 
 const hasDates = computed(() => !!trip.value?.start_date && !!trip.value?.end_date)
 

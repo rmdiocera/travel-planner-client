@@ -381,6 +381,18 @@ describe('Trip page', () => {
       expect(scrollIntoView).not.toHaveBeenCalled()
     })
 
+    it('opening one stop closes the other', async () => {
+      spotsRef.value = { data: { '2027-03-13': [stop1, stop2] } }
+      const { wrapper } = await mountTripPage()
+
+      await wrapper.find('[data-testid="stop-toggle-s1"]').trigger('click')
+      expect(wrapper.find('[data-testid="stop-toggle-s1"]').attributes('aria-expanded')).toBe('true')
+
+      await wrapper.find('[data-testid="stop-toggle-s2"]').trigger('click')
+      expect(wrapper.find('[data-testid="stop-toggle-s1"]').attributes('aria-expanded')).toBe('false')
+      expect(wrapper.find('[data-testid="stop-toggle-s2"]').attributes('aria-expanded')).toBe('true')
+    })
+
     it('removes a stop from its day without asking', async () => {
       spotsRef.value = { data: { '2027-03-13': [stop1, stop2] } }
       clientMock.mockResolvedValue(undefined)

@@ -4,6 +4,11 @@ import type { Spot } from '~/types/spot'
 
 defineProps<{
   stops: Spot[]
+  openStopId?: string | null
+}>()
+
+defineEmits<{
+  toggleStop: [id: string]
 }>()
 </script>
 
@@ -25,10 +30,14 @@ defineProps<{
       Change the trip's dates to bring them back, or remove them.
     </p>
     <TripStopRow
-      v-for="stop in stops"
+      v-for="(stop, index) in stops"
       :key="stop.id"
       :stop="stop"
       variant="outside"
+      :open="openStopId === stop.id"
+      :is-first="index === 0"
+      :is-last="index === stops.length - 1"
+      @toggle="$emit('toggleStop', stop.id)"
     />
   </section>
 </template>
