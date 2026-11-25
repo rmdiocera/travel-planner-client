@@ -723,6 +723,15 @@ describe('Trip page', () => {
       expect(wrapper.find('[data-testid="list-place-i1"]').text()).not.toContain('Tokyo')
     })
 
+    it('lets a list place\'s name take two lines and breaks a long word, so it cannot push the photo or the menu off the row', async () => {
+      listsRef.value = { data: [list([placeItem])] }
+      const { wrapper } = await mountTripPage()
+
+      const name = wrapper.find('[data-testid="list-place-toggle-i1"] p')
+      expect(name.text()).toBe('Ameyoko Market')
+      expect(name.classes()).toEqual(expect.arrayContaining(['line-clamp-2', 'wrap-anywhere']))
+    })
+
     it('adds a checklist from + Checklist, and opens its next box', async () => {
       listsRef.value = { data: [list([])] }
       clientMock

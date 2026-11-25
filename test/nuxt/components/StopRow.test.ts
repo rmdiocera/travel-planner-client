@@ -194,6 +194,14 @@ describe('TripStopRow', () => {
       expect(wrapper.text()).not.toContain('Kyoto')
     })
 
+    it('lets the name take two lines and breaks a long word, so it cannot push the photo or the menu off the row', async () => {
+      const wrapper = await mountRow(makeSpot('s1', '2027-03-13'))
+
+      const name = wrapper.find('[data-testid="stop-toggle-s1"] p')
+      expect(name.text()).toBe('Place s1')
+      expect(name.classes()).toEqual(expect.arrayContaining(['line-clamp-2', 'wrap-anywhere']))
+    })
+
     it('shows the place\'s details under its name, cut after two lines and hidden from screen readers', async () => {
       const wrapper = await mountRow(makeSpot('s1', '2027-03-13', { place: castle }))
 

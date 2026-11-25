@@ -137,7 +137,7 @@ const inlineTime = computed<string | null>(() => {
           >Any time</span>
         </div>
         <div class="min-w-0 flex-1">
-          <p class="line-clamp-2 font-medium">
+          <p class="line-clamp-2 wrap-anywhere font-medium">
             {{ stop.place.name }}
           </p>
           <p

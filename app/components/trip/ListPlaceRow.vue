@@ -102,7 +102,7 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
           @click="$emit('toggle')"
         >
           <div class="min-w-0 flex-1">
-            <p class="line-clamp-2 font-medium">
+            <p class="line-clamp-2 wrap-anywhere font-medium">
               {{ place.name }}
             </p>
             <!-- aria-hidden: the preview sits inside the toggle button, so it would otherwise be read out with the button's name. -->
