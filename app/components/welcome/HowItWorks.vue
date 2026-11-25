@@ -1,20 +1,33 @@
 <script setup lang="ts">
-// Each placeholder stands in for a screenshot of that step, to be added later.
+import WelcomePreviewDay from '~/components/welcome/PreviewDay.vue'
+import WelcomePreviewList from '~/components/welcome/PreviewList.vue'
+import WelcomePreviewTrip from '~/components/welcome/PreviewTrip.vue'
+
+// Each step shows a piece of the app, drawn from sample data (no request is made).
 const steps = [
   {
     title: 'Create a trip',
     text: 'Give it a name and your travel dates.',
-    placeholder: 'Screenshot: a new trip with its name and dates',
+    preview: WelcomePreviewTrip,
+    label: 'A trip card on the Trips page: Japan in spring, Mar 28 to Apr 3, 2027, 7 days.',
+    center: true,
+    fade: false,
   },
   {
     title: 'Add places to each day',
     text: 'Find the places you want to see and put each one on the day you\'ll go.',
-    placeholder: 'Screenshot: a day with its places',
+    preview: WelcomePreviewDay,
+    label: 'Day 1 of a trip, Sun 28 Mar: Senso-ji from 09:00 to 10:30, Tokyo Skytree from 11:00 to 12:30, and Meiji Jingu at any time.',
+    center: false,
+    fade: true,
   },
   {
     title: 'Keep notes and checklists',
     text: 'Make lists for the whole trip, like "Things to bring" or "Must see", with notes, checklists and places.',
-    placeholder: 'Screenshot: a list with notes, a checklist and a place',
+    preview: WelcomePreviewList,
+    label: 'A list called Must see, with the place Tsukiji Outer Market (on day 2), a note: Go early, most stalls close by 2 PM, and a checklist called Book ahead: teamLab Planets (ticked) and Shibuya Sky.',
+    center: false,
+    fade: false,
   },
 ]
 </script>
@@ -41,10 +54,15 @@ const steps = [
       <li
         v-for="(step, i) in steps"
         :key="step.title"
+        class="min-w-0"
       >
-        <div class="aspect-[4/3] grid place-items-center rounded-xl border border-default bg-default p-6 text-center text-sm text-dimmed">
-          {{ step.placeholder }}
-        </div>
+        <WelcomePreviewFrame
+          :label="step.label"
+          :center="step.center"
+          :fade="step.fade"
+        >
+          <component :is="step.preview" />
+        </WelcomePreviewFrame>
         <h3 class="mt-4.5 flex items-center gap-2 text-lg font-semibold text-highlighted">
           <span
             class="grid size-6.5 shrink-0 place-items-center rounded-full bg-primary/10 text-sm font-bold text-primary"
