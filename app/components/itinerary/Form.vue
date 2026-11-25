@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { CalendarDate } from '@internationalized/date'
-import { getLocalTimeZone, DateFormatter, today } from '@internationalized/date'
+import { getLocalTimeZone, DateFormatter, parseDate, today } from '@internationalized/date'
+import type { FormError } from '@nuxt/ui'
 import type { Itinerary, ItineraryResponse } from '~/types/itinerary'
 
 const props = defineProps<{
@@ -19,17 +20,23 @@ defineExpose({
   triggerSubmit,
 })
 
+// parseDate reads "YYYY-MM-DD" as that calendar day. new Date() would read it as UTC midnight,
+// which is the previous day west of UTC.
 const startDate = shallowRef<CalendarDate | undefined>(
   props.selectedItinerary?.start_date
-    ? toCalendarDate(new Date(props.selectedItinerary.start_date))
+    ? parseDate(props.selectedItinerary.start_date)
     : undefined,
 )
 const endDate = shallowRef<CalendarDate | undefined>(
   props.selectedItinerary?.end_date
-    ? toCalendarDate(new Date(props.selectedItinerary.end_date))
+    ? parseDate(props.selectedItinerary.end_date)
     : undefined,
 )
 const dateToday = today(getLocalTimeZone())
+
+// An end date can't be before the start, nor before today: an edit that moved a trip's end into the past
+// would make it a past trip, and Edit trip is off for those, so it couldn't be undone.
+const endMinValue = computed(() => startDate.value && startDate.value.compare(dateToday) > 0 ? startDate.value : dateToday)
 
 const df = new DateFormatter('en-US', {
   dateStyle: 'medium',
@@ -48,11 +55,22 @@ const form = ref({
 const { showToast } = useAppToast()
 const client = useSanctumClient()
 
+// The date pickers don't report changes to the form, so a date error would stay up after the user fixes it.
+// Re-check only while one is showing, so picking the first date doesn't raise an error early.
+function recheckDates() {
+  const showing = ((formRef.value as any)?.getErrors?.() ?? [])
+    .some((error: FormError) => error.name === 'start_date' || error.name === 'end_date')
+  if (showing) {
+    void (formRef.value as any).validate({ name: ['start_date', 'end_date'], silent: true })
+  }
+}
+
 watch(startDate, (value) => {
   if (value) {
     form.value.start_date = value.toString()
     startDateCalOpen.value = false
   }
+  recheckDates()
 })
 
 watch(endDate, (value) => {
@@ -60,10 +78,42 @@ watch(endDate, (value) => {
     form.value.end_date = value.toString()
     endDateCalOpen.value = false
   }
+  recheckDates()
 })
 
 function triggerSubmit() {
   (formRef.value as any)?.submit()
+}
+
+// The date watchers skip undefined, so the form fields are emptied here too.
+function clearDates() {
+  startDate.value = undefined
+  endDate.value = undefined
+  form.value.start_date = ''
+  form.value.end_date = ''
+  recheckDates()
+}
+
+// A trip may have no dates yet, but never only one of them.
+function validate(values: typeof form.value): FormError[] {
+  const errors: FormError[] = []
+
+  if (!values.name.trim()) {
+    errors.push({ name: 'name', message: 'Enter a name' })
+  }
+
+  if (values.start_date && !values.end_date) {
+    errors.push({ name: 'end_date', message: 'Select an end date too' })
+  }
+  else if (!values.start_date && values.end_date) {
+    errors.push({ name: 'start_date', message: 'Select a start date too' })
+  }
+  // Both are YYYY-MM-DD, so comparing the strings compares the dates.
+  else if (values.start_date && values.end_date && values.end_date < values.start_date) {
+    errors.push({ name: 'end_date', message: 'The end date can\'t be before the start date' })
+  }
+
+  return errors
 }
 
 async function handleSubmit() {
@@ -119,6 +169,7 @@ async function handleSubmit() {
   <UForm
     ref="form"
     :state="form"
+    :validate="validate"
     @submit="handleSubmit"
   >
     <div class="grid gap-4">
@@ -156,7 +207,7 @@ async function handleSubmit() {
               <template #content>
                 <UCalendar
                   v-model="startDate"
-                  :min-value="dateToday"
+                  :min-value="isEditing ? undefined : dateToday"
                   class="p-2"
                   data-testid="start-date-cal"
                 />
@@ -184,12 +235,24 @@ async function handleSubmit() {
               <template #content>
                 <UCalendar
                   v-model="endDate"
+                  :min-value="endMinValue"
                   class="p-2"
                   data-testid="end-date-cal"
                 />
               </template>
             </UPopover>
           </UFormField>
+        </div>
+        <div v-if="startDate || endDate">
+          <UButton
+            label="Clear dates"
+            variant="link"
+            color="neutral"
+            size="xs"
+            icon="i-lucide-x"
+            data-testid="clear-dates-btn"
+            @click="clearDates"
+          />
         </div>
       </div>
     </div>

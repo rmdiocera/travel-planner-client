@@ -1,4 +1,4 @@
-import { CalendarDate, DateFormatter } from '@internationalized/date'
+import { CalendarDate, DateFormatter, getLocalTimeZone, parseDate, today } from '@internationalized/date'
 
 const df = new DateFormatter('en-US', {
   dateStyle: 'medium',
@@ -15,6 +15,17 @@ export function dateDiffInDays(start_date: Date, end_date: Date) {
 
   const day_count = Math.floor((end_date_utc - start_date_utc) / _MS_PER_DAY) + 1
   return `${day_count} ${day_count > 1 ? 'days' : 'day'}`
+}
+
+// An API date ("YYYY-MM-DD") as local midnight of that day. new Date("YYYY-MM-DD") is UTC midnight,
+// which is the previous day west of UTC.
+export function toLocalDate(date: string) {
+  return parseDate(date).toDate(getLocalTimeZone())
+}
+
+// Negative when the API date is before today, zero for today, positive after.
+export function compareToToday(date: string) {
+  return parseDate(date).compare(today(getLocalTimeZone()))
 }
 
 export function toCalendarDate(date: Date) {

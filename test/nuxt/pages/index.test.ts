@@ -1,7 +1,10 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
+import type { DOMWrapper, VueWrapper } from '@vue/test-utils'
 import { mountIndexPage } from '../../utils/mountIndexPage'
+import { menuItems } from '../../utils/menu'
+import { setTimeZone } from '../../utils/timeZone'
 import ItineraryGrid from '~/components/itinerary/Grid.vue'
 
 const widthRef = ref(768)
@@ -18,14 +21,24 @@ const { clientMock, lazyFetchMock, toastAddMock } = vi.hoisted(() => ({
 }))
 
 const upcomingItinerary = { id: 'i2', name: 'Trip to Kyoto', start_date: '2027-01-15', end_date: '2027-01-20' }
-let upcomingItineraries: Record<string, string>[] = []
+let upcomingItineraries: Record<string, string | null>[] = []
+let unscheduledItineraries: Record<string, string | null>[] = []
+let pastItineraries: Record<string, string | null>[] = []
+let sendsUnscheduledGroup = true
 
 mockNuxtImport('useLazySanctumFetch', () => {
   return (url: string, options?: Record<string, unknown>) => {
     lazyFetchMock(url, options)
     if (url === '/api/v1/itineraries') {
       return {
-        data: ref({ data: { past: [], ongoing: [], upcoming: [...upcomingItineraries] } }),
+        data: ref({
+          data: {
+            past: [...pastItineraries],
+            ongoing: [],
+            upcoming: [...upcomingItineraries],
+            ...(sendsUnscheduledGroup ? { unscheduled: [...unscheduledItineraries] } : {}),
+          },
+        }),
         pending: ref(false),
         error: ref(null),
         refresh: vi.fn(),
@@ -58,6 +71,15 @@ vi.mock(import('@vueuse/core'), async (importOriginal) => {
 })
 
 describe('Index page', () => {
+  async function fillName(bodyWrapper: DOMWrapper<Element>) {
+    await bodyWrapper.find('input[name="name"]').setValue('Trip to Kyoto')
+  }
+
+  async function pickDate(bodyWrapper: DOMWrapper<Element>, field: 'start' | 'end', date: string) {
+    await bodyWrapper.find(`button[data-testid="select-${field}-date-btn"]`).trigger('click')
+    await bodyWrapper.find(`div[data-value="${date}"]`).trigger('click')
+  }
+
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-07-01'))
@@ -148,6 +170,27 @@ describe('Index page', () => {
       const dateYesterdayDiv = bodyWrapper.find('div[data-value="2026-06-30"]')
       expect(dateYesterdayDiv.attributes()).toHaveProperty('data-disabled')
     })
+
+    it('disables end dates before the chosen start date', async () => {
+      const { bodyWrapper } = await mountIndexPage()
+      await pickDate(bodyWrapper, 'start', '2026-07-21')
+      await bodyWrapper.find('button[data-testid="select-end-date-btn"]').trigger('click')
+
+      // Calendars from earlier tests can still be in <body>; the newest one is the one just opened.
+      const endDay = (date: string) => bodyWrapper.findAll(`[data-testid="end-date-cal"] div[data-value="${date}"]`).at(-1)!
+      expect(endDay('2026-07-20').attributes()).toHaveProperty('data-disabled')
+      expect(endDay('2026-07-21').attributes()).not.toHaveProperty('data-disabled')
+    })
+
+    it('disables end dates before today when no start date is chosen', async () => {
+      const { bodyWrapper } = await mountIndexPage()
+      await bodyWrapper.find('button[data-testid="select-end-date-btn"]').trigger('click')
+
+      // Calendars from earlier tests can still be in <body>; the newest one is the one just opened.
+      const endDay = (date: string) => bodyWrapper.findAll(`[data-testid="end-date-cal"] div[data-value="${date}"]`).at(-1)!
+      expect(endDay('2026-06-30').attributes()).toHaveProperty('data-disabled')
+      expect(endDay('2026-07-01').attributes()).not.toHaveProperty('data-disabled')
+    })
   })
 
   describe('Form submission, success path', () => {
@@ -170,6 +213,7 @@ describe('Index page', () => {
 
     it('closes the modal on successful POST', async () => {
       const { bodyWrapper } = await mountIndexPage()
+      await fillName(bodyWrapper)
       await bodyWrapper.find('button[data-testid="create-itinerary-btn"]').trigger('click')
       await flushPromises()
 
@@ -179,6 +223,7 @@ describe('Index page', () => {
 
     it('shows a success toast with the correct title and icon on successful POST', async () => {
       const { bodyWrapper } = await mountIndexPage()
+      await fillName(bodyWrapper)
       await bodyWrapper.find('button[data-testid="create-itinerary-btn"]').trigger('click')
       await flushPromises()
 
@@ -198,6 +243,7 @@ describe('Index page', () => {
       })
 
       const { bodyWrapper } = await mountIndexPage()
+      await fillName(bodyWrapper)
 
       const submitBtn = bodyWrapper.find('button[data-testid="create-itinerary-btn"]')
       await submitBtn.trigger('click')
@@ -226,18 +272,7 @@ describe('Index page', () => {
       })
 
       const { bodyWrapper } = await mountIndexPage()
-
-      const startDateCalendar = bodyWrapper.find('button[data-testid="select-start-date-btn"]')
-      await startDateCalendar.trigger('click')
-      const matchingStartDateDiv = bodyWrapper.find('div[data-value="2026-07-28"]')
-      await matchingStartDateDiv?.trigger('click')
-      expect(startDateCalendar.find('span:not([aria-hidden])').text()).toBe('Jul 28, 2026')
-
-      const endDateCalendar = bodyWrapper.find('button[data-testid="select-end-date-btn"]')
-      await endDateCalendar.trigger('click')
-      const matchingendDateDiv = bodyWrapper.find('div[data-value="2026-07-21"]')
-      await matchingendDateDiv?.trigger('click')
-      expect(endDateCalendar.find('span:not([aria-hidden])').text()).toBe('Jul 21, 2026')
+      await fillName(bodyWrapper)
 
       await bodyWrapper.find('button[data-testid="create-itinerary-btn"]').trigger('click')
       await flushPromises()
@@ -251,6 +286,7 @@ describe('Index page', () => {
       clientMock.mockRejectedValue(new Error('Network Error'))
 
       const { bodyWrapper } = await mountIndexPage()
+      await fillName(bodyWrapper)
       await bodyWrapper.find('button[data-testid="create-itinerary-btn"]').trigger('click')
       await flushPromises()
 
@@ -259,6 +295,156 @@ describe('Index page', () => {
         icon: 'i-lucide-circle-x',
         description: 'There was a problem with your request',
         color: 'error',
+      })
+    })
+  })
+
+  describe('Form validation', () => {
+    it('shows Enter a name and sends nothing when the name is empty', async () => {
+      const { bodyWrapper } = await mountIndexPage()
+      await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
+      await flushPromises()
+
+      expect(bodyWrapper.findAll('.text-error').map(e => e.text())).toContain('Enter a name')
+      expect(clientMock).not.toHaveBeenCalled()
+    })
+
+    it('asks for the end date when only the start is picked', async () => {
+      const { bodyWrapper } = await mountIndexPage()
+      await fillName(bodyWrapper)
+      await pickDate(bodyWrapper, 'start', '2026-07-21')
+      await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
+      await flushPromises()
+
+      expect(bodyWrapper.findAll('.text-error').map(e => e.text())).toContain('Select an end date too')
+      expect(clientMock).not.toHaveBeenCalled()
+    })
+
+    it('asks for the start date when only the end is picked', async () => {
+      const { bodyWrapper } = await mountIndexPage()
+      await fillName(bodyWrapper)
+      await pickDate(bodyWrapper, 'end', '2026-07-28')
+      await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
+      await flushPromises()
+
+      expect(bodyWrapper.findAll('.text-error').map(e => e.text())).toContain('Select a start date too')
+      expect(clientMock).not.toHaveBeenCalled()
+    })
+
+    it('shows an error when the end date is before the start date', async () => {
+      const { bodyWrapper } = await mountIndexPage()
+      await fillName(bodyWrapper)
+      await pickDate(bodyWrapper, 'start', '2026-07-21')
+      await pickDate(bodyWrapper, 'end', '2026-07-28')
+      await pickDate(bodyWrapper, 'start', '2026-07-30')
+      await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
+      await flushPromises()
+
+      expect(bodyWrapper.findAll('.text-error').map(e => e.text())).toContain('The end date can\'t be before the start date')
+      expect(clientMock).not.toHaveBeenCalled()
+    })
+
+    it('does not show a date error just because one date was picked', async () => {
+      const { bodyWrapper } = await mountIndexPage()
+      await pickDate(bodyWrapper, 'start', '2026-07-21')
+      await flushPromises()
+
+      expect(bodyWrapper.findAll('.text-error')).toHaveLength(0)
+    })
+
+    it('removes the date error once the missing date is picked', async () => {
+      const { bodyWrapper } = await mountIndexPage()
+      await fillName(bodyWrapper)
+      await pickDate(bodyWrapper, 'start', '2026-07-21')
+      await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
+      await flushPromises()
+      expect(bodyWrapper.findAll('.text-error').map(e => e.text())).toContain('Select an end date too')
+
+      await pickDate(bodyWrapper, 'end', '2026-07-28')
+      await flushPromises()
+
+      expect(bodyWrapper.findAll('.text-error')).toHaveLength(0)
+    })
+
+    it('removes the date error when the dates are cleared', async () => {
+      const { bodyWrapper } = await mountIndexPage()
+      await fillName(bodyWrapper)
+      await pickDate(bodyWrapper, 'start', '2026-07-21')
+      await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
+      await flushPromises()
+
+      await bodyWrapper.find('button[data-testid="clear-dates-btn"]').trigger('click')
+      await flushPromises()
+
+      expect(bodyWrapper.findAll('.text-error')).toHaveLength(0)
+    })
+
+    it('clears the errors when the form is closed and opened again', async () => {
+      const { wrapper, bodyWrapper } = await mountIndexPage()
+      await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
+      await flushPromises()
+      await bodyWrapper.find(SELECTORS.closeBtn).trigger('click')
+      await wrapper.find(SELECTORS.openBtn).trigger('click')
+      await nextTick()
+
+      expect(bodyWrapper.findAll('.text-error')).toHaveLength(0)
+    })
+  })
+
+  describe('Clear dates', () => {
+    const CLEAR_DATES_BTN = 'button[data-testid="clear-dates-btn"]'
+
+    afterEach(() => {
+      upcomingItineraries = []
+    })
+
+    it('shows Clear dates only once a date is picked', async () => {
+      const { bodyWrapper } = await mountIndexPage()
+      expect(bodyWrapper.find(CLEAR_DATES_BTN).exists()).toBe(false)
+
+      await pickDate(bodyWrapper, 'start', '2026-07-21')
+      expect(bodyWrapper.find(CLEAR_DATES_BTN).exists()).toBe(true)
+    })
+
+    it('clears both dates', async () => {
+      clientMock.mockResolvedValue({ data: { id: 'i1', name: 'Trip to Kyoto', start_date: null, end_date: null } })
+      const { bodyWrapper } = await mountIndexPage()
+      await pickDate(bodyWrapper, 'start', '2026-07-21')
+      await pickDate(bodyWrapper, 'end', '2026-07-28')
+      await bodyWrapper.find(CLEAR_DATES_BTN).trigger('click')
+
+      expect(bodyWrapper.find('button[data-testid="select-start-date-btn"] span:not([aria-hidden])').text()).toBe('Select a date')
+      expect(bodyWrapper.find('button[data-testid="select-end-date-btn"] span:not([aria-hidden])').text()).toBe('Select a date')
+
+      await fillName(bodyWrapper)
+      await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
+      await flushPromises()
+
+      expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries', {
+        method: 'POST',
+        body: { name: 'Trip to Kyoto', start_date: '', end_date: '' },
+      })
+    })
+
+    it('clears an edited trip\'s dates', async () => {
+      upcomingItineraries = [upcomingItinerary]
+      clientMock.mockResolvedValue({ data: { ...upcomingItinerary, start_date: null, end_date: null } })
+      const { wrapper, bodyWrapper } = await mountIndexPage({ openCreateModal: false })
+
+      // Grid's menu is a teleported Nuxt UI dropdown, so emit what its Edit item emits.
+      const grid = wrapper.findComponent(ItineraryGrid)
+      grid.vm.$emit('isModalOpen', true)
+      grid.vm.$emit('isEditing', true)
+      grid.vm.$emit('selectedItinerary', upcomingItinerary)
+      await nextTick()
+
+      await bodyWrapper.find(CLEAR_DATES_BTN).trigger('click')
+      await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
+      await flushPromises()
+
+      expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/i2', {
+        method: 'PATCH',
+        body: { name: 'Trip to Kyoto', start_date: '', end_date: '' },
       })
     })
   })
@@ -293,15 +479,18 @@ describe('Index page', () => {
       upcomingItineraries = []
     })
 
-    it('sends a PATCH with the edited form for the selected itinerary', async () => {
-      const { wrapper, bodyWrapper } = await mountIndexPage({ openCreateModal: false })
-
-      // Grid's menu is a teleported Nuxt UI dropdown, so emit what its Edit item emits.
+    // Grid's menu is a teleported Nuxt UI dropdown, so emit what its Edit item emits.
+    async function openEditForm(wrapper: VueWrapper, itinerary: Record<string, string | null>) {
       const grid = wrapper.findComponent(ItineraryGrid)
       grid.vm.$emit('isModalOpen', true)
       grid.vm.$emit('isEditing', true)
-      grid.vm.$emit('selectedItinerary', upcomingItinerary)
+      grid.vm.$emit('selectedItinerary', itinerary)
       await nextTick()
+    }
+
+    it('sends a PATCH with the edited form for the selected itinerary', async () => {
+      const { wrapper, bodyWrapper } = await mountIndexPage({ openCreateModal: false })
+      await openEditForm(wrapper, upcomingItinerary)
 
       await bodyWrapper.find('input[name="name"]').setValue('Trip to Kyoto and Nara')
       await bodyWrapper.find('button[data-testid="create-itinerary-btn"]').trigger('click')
@@ -311,6 +500,71 @@ describe('Index page', () => {
         method: 'PATCH',
         body: { name: 'Trip to Kyoto and Nara', start_date: '2027-01-15', end_date: '2027-01-20' },
       })
+    })
+
+    it('shows the saved dates on their own day west of UTC', async () => {
+      setTimeZone('America/Los_Angeles')
+
+      const { wrapper, bodyWrapper } = await mountIndexPage({ openCreateModal: false })
+      await openEditForm(wrapper, upcomingItinerary)
+
+      expect(bodyWrapper.find('button[data-testid="select-start-date-btn"] span:not([aria-hidden])').text()).toBe('Jan 15, 2027')
+      expect(bodyWrapper.find('button[data-testid="select-end-date-btn"] span:not([aria-hidden])').text()).toBe('Jan 20, 2027')
+    })
+
+    it('lets an edit pick a start date before today', async () => {
+      const ongoingItinerary = { id: 'i3', name: 'Trip to Osaka', start_date: '2026-06-28', end_date: '2026-07-05' }
+      const { wrapper, bodyWrapper } = await mountIndexPage({ openCreateModal: false })
+      await openEditForm(wrapper, ongoingItinerary)
+      await bodyWrapper.find('button[data-testid="select-start-date-btn"]').trigger('click')
+
+      expect(bodyWrapper.find('div[data-value="2026-06-27"]').attributes()).not.toHaveProperty('data-disabled')
+    })
+
+    it('keeps an edit\'s end date from going before today', async () => {
+      const ongoingItinerary = { id: 'i3', name: 'Trip to Osaka', start_date: '2026-06-28', end_date: '2026-07-05' }
+      const { wrapper, bodyWrapper } = await mountIndexPage({ openCreateModal: false })
+      await openEditForm(wrapper, ongoingItinerary)
+      await bodyWrapper.find('button[data-testid="select-end-date-btn"]').trigger('click')
+
+      // Calendars from earlier tests can still be in <body>; the newest one is the one just opened.
+      const endDay = (date: string) => bodyWrapper.findAll(`[data-testid="end-date-cal"] div[data-value="${date}"]`).at(-1)!
+      expect(endDay('2026-06-30').attributes()).toHaveProperty('data-disabled')
+      expect(endDay('2026-07-01').attributes()).not.toHaveProperty('data-disabled')
+    })
+
+    it('opens the edit form for a trip without dates', async () => {
+      const { wrapper, bodyWrapper } = await mountIndexPage({ openCreateModal: false })
+      await openEditForm(wrapper, { ...upcomingItinerary, start_date: null, end_date: null })
+
+      expect(bodyWrapper.find('button[data-testid="select-start-date-btn"] span:not([aria-hidden])').text()).toBe('Select a date')
+      expect(bodyWrapper.find('button[data-testid="select-end-date-btn"] span:not([aria-hidden])').text()).toBe('Select a date')
+    })
+  })
+
+  describe('Cards without dates', () => {
+    const undatedItinerary = { id: 'i9', name: 'Iceland someday', start_date: null, end_date: null }
+
+    beforeEach(() => {
+      upcomingItineraries = [undatedItinerary]
+    })
+
+    afterEach(() => {
+      upcomingItineraries = []
+    })
+
+    it('says No dates yet on a card without dates', async () => {
+      const { wrapper } = await mountIndexPage({ openCreateModal: false })
+
+      expect(wrapper.text()).toContain('No dates yet')
+      expect(wrapper.text()).not.toContain('Invalid Date')
+    })
+
+    it('keeps Edit available on a card without dates', async () => {
+      const { wrapper } = await mountIndexPage({ openCreateModal: false })
+
+      const edit = menuItems(wrapper, 'itinerary-menu-btn-i9').find(item => item.label === 'Edit')
+      expect(edit?.disabled).toBe(false)
     })
   })
 
@@ -386,6 +640,121 @@ describe('Index page', () => {
         description: 'There was a problem with your request',
         color: 'error',
       })
+    })
+  })
+
+  describe('Cards and grouping west of UTC', () => {
+    // 20:00 UTC on 1 Jul is 13:00 on 1 Jul in Los Angeles.
+    beforeEach(() => {
+      vi.setSystemTime(new Date('2026-07-01T20:00:00Z'))
+      setTimeZone('America/Los_Angeles')
+    })
+
+    afterEach(() => {
+      upcomingItineraries = []
+    })
+
+    it('shows the dates on a card on their own day', async () => {
+      upcomingItineraries = [upcomingItinerary]
+      const { wrapper } = await mountIndexPage({ openCreateModal: false })
+
+      expect(wrapper.text()).toContain('Jan 15, 2027 - Jan 20, 2027 • 6 days')
+    })
+
+    it('keeps Edit available on the last day of an ongoing trip', async () => {
+      upcomingItineraries = [{ id: 'i5', name: 'Trip to Osaka', start_date: '2026-06-28', end_date: '2026-07-01' }]
+      const { wrapper } = await mountIndexPage({ openCreateModal: false })
+
+      const edit = menuItems(wrapper, 'itinerary-menu-btn-i5').find(item => item.label === 'Edit')
+      expect(edit?.disabled).toBe(false)
+    })
+
+    it('files a trip that starts tomorrow under Upcoming', async () => {
+      upcomingItineraries = [upcomingItinerary]
+      clientMock.mockResolvedValue({ data: { id: 'i7', name: 'Weekend away', start_date: '2026-07-02', end_date: '2026-07-03' } })
+      const { wrapper, bodyWrapper } = await mountIndexPage()
+      await bodyWrapper.find('input[name="name"]').setValue('Weekend away')
+      await pickDate(bodyWrapper, 'start', '2026-07-02')
+      await pickDate(bodyWrapper, 'end', '2026-07-03')
+      await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
+      await flushPromises()
+
+      const headings = wrapper.findAll('h2.itinerary-heading').map(h2 => h2.text())
+      expect(headings).toEqual(['Upcoming'])
+      expect(wrapper.text()).toContain('Weekend away')
+    })
+  })
+
+  describe('Unscheduled trips', () => {
+    const undatedItinerary = { id: 'i9', name: 'Iceland someday', start_date: null, end_date: null }
+    const pastItinerary = { id: 'i1', name: 'Trip to Tokyo', start_date: '2025-07-21', end_date: '2025-07-28' }
+
+    afterEach(() => {
+      upcomingItineraries = []
+      unscheduledItineraries = []
+      pastItineraries = []
+      sendsUnscheduledGroup = true
+    })
+
+    function groupText(wrapper: VueWrapper, heading: string) {
+      return wrapper.findAll('h2.itinerary-heading')
+        .find(h2 => h2.text() === heading)?.element.parentElement?.textContent ?? ''
+    }
+
+    it('shows trips without dates under Unscheduled, between Upcoming and Past', async () => {
+      upcomingItineraries = [upcomingItinerary]
+      unscheduledItineraries = [undatedItinerary]
+      pastItineraries = [pastItinerary]
+      const { wrapper } = await mountIndexPage({ openCreateModal: false })
+
+      expect(wrapper.findAll('h2.itinerary-heading').map(h2 => h2.text())).toEqual(['Upcoming', 'Unscheduled', 'Past'])
+      expect(groupText(wrapper, 'Unscheduled')).toContain('Iceland someday')
+    })
+
+    it('puts a new trip without dates under Unscheduled', async () => {
+      upcomingItineraries = [upcomingItinerary]
+      clientMock.mockResolvedValue({ data: undatedItinerary })
+      const { wrapper, bodyWrapper } = await mountIndexPage()
+      await bodyWrapper.find('input[name="name"]').setValue('Iceland someday')
+      await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
+      await flushPromises()
+
+      expect(groupText(wrapper, 'Unscheduled')).toContain('Iceland someday')
+      expect(groupText(wrapper, 'Upcoming')).not.toContain('Iceland someday')
+    })
+
+    it('moves an unscheduled trip to Upcoming when it gets dates', async () => {
+      unscheduledItineraries = [undatedItinerary]
+      clientMock.mockResolvedValue({ data: { ...undatedItinerary, start_date: '2027-01-15', end_date: '2027-01-20' } })
+      const { wrapper, bodyWrapper } = await mountIndexPage({ openCreateModal: false })
+
+      // Grid's menu is a teleported Nuxt UI dropdown, so emit what its Edit item emits.
+      const grid = wrapper.findComponent(ItineraryGrid)
+      grid.vm.$emit('isModalOpen', true)
+      grid.vm.$emit('isEditing', true)
+      grid.vm.$emit('selectedItinerary', undatedItinerary)
+      await nextTick()
+      await bodyWrapper.find(SELECTORS.createBtn).trigger('click')
+      await flushPromises()
+
+      expect(wrapper.findAll('h2.itinerary-heading').map(h2 => h2.text())).toEqual(['Upcoming'])
+      expect(groupText(wrapper, 'Upcoming')).toContain('Iceland someday')
+    })
+
+    it('works with a backend that has no unscheduled group yet', async () => {
+      sendsUnscheduledGroup = false
+      upcomingItineraries = [upcomingItinerary]
+      const { wrapper } = await mountIndexPage({ openCreateModal: false })
+
+      expect(wrapper.findAll('h2.itinerary-heading').map(h2 => h2.text())).toEqual(['Upcoming'])
+    })
+
+    it('shows No trips yet only when every group is empty', async () => {
+      unscheduledItineraries = [undatedItinerary]
+      const { wrapper } = await mountIndexPage({ openCreateModal: false })
+
+      expect(wrapper.text()).not.toContain('No trips yet')
+      expect(wrapper.text()).toContain('Iceland someday')
     })
   })
 
