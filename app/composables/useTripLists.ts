@@ -1,5 +1,5 @@
 import type { InjectionKey } from 'vue'
-import type { ItineraryList, ListItem, ListItemResponse, ListResponse, ListsResponse } from '~/types/list'
+import type { ChecklistEntry, ChecklistEntryResponse, ItineraryList, ListItem, ListItemResponse, ListResponse, ListsResponse } from '~/types/list'
 import { moveId } from '~/utils/trip/order'
 
 // The result of saving typed text. `error` is the API's first 422 message, for the box that was saving.
@@ -278,6 +278,105 @@ export function useTripLists(itineraryId: string) {
     await reorderItems(list, moveId(ids, from, to))
   }
 
+  const entriesUrl = (list: ItineraryList, item: ListItem) => `${itemsUrl(list)}/${item.id}/checklist`
+
+  function updateEntries(listId: string, itemId: string, change: (entries: ChecklistEntry[]) => ChecklistEntry[]) {
+    updateItems(listId, items => items.map(item => item.id === itemId ? { ...item, checklist_items: change(item.checklist_items) } : item))
+  }
+
+  // A new entry comes back with is_checked null, which means not ticked.
+  const tidyEntry = (entry: ChecklistEntry): ChecklistEntry => ({ ...entry, is_checked: !!entry.is_checked })
+
+  async function addEntry(list: ItineraryList, item: ListItem, label: string): Promise<SaveResult> {
+    try {
+      const response = await client<ChecklistEntryResponse>(entriesUrl(list, item), { method: 'POST', body: { label } })
+      updateEntries(list.id, item.id, entries => [...entries, tidyEntry(response.data)])
+      return { ok: true }
+    }
+    catch (caught) {
+      return failure(caught)
+    }
+  }
+
+  // The API takes exactly one of label and is_checked in a request, so each is sent alone.
+  async function renameEntry(list: ItineraryList, item: ListItem, entry: ChecklistEntry, label: string): Promise<SaveResult> {
+    try {
+      const response = await client<ChecklistEntryResponse>(`${entriesUrl(list, item)}/${entry.id}`, { method: 'PATCH', body: { label } })
+      updateEntries(list.id, item.id, entries => entries.map(other => other.id === entry.id ? tidyEntry(response.data) : other))
+      return { ok: true }
+    }
+    catch (caught) {
+      return failure(caught)
+    }
+  }
+
+  // Shown at once, and put back if the request fails. A second tick waits for the first.
+  async function toggleEntry(list: ItineraryList, item: ListItem, entry: ChecklistEntry): Promise<void> {
+    if (isSaving(entry.id)) {
+      return
+    }
+
+    const ticked = !entry.is_checked
+    const setTicked = (value: boolean) =>
+      updateEntries(list.id, item.id, entries => entries.map(other => other.id === entry.id ? { ...other, is_checked: value } : other))
+
+    setSaving(entry.id, true)
+    setTicked(ticked)
+    try {
+      await client<ChecklistEntryResponse>(`${entriesUrl(list, item)}/${entry.id}`, { method: 'PATCH', body: { is_checked: ticked } })
+    }
+    catch {
+      setTicked(!ticked)
+      showError()
+    }
+    finally {
+      setSaving(entry.id, false)
+    }
+  }
+
+  async function deleteEntry(list: ItineraryList, item: ListItem, entry: ChecklistEntry): Promise<boolean> {
+    try {
+      await client<unknown>(`${entriesUrl(list, item)}/${entry.id}`, { method: 'DELETE' })
+      updateEntries(list.id, item.id, entries => entries.filter(other => other.id !== entry.id))
+      return true
+    }
+    catch {
+      showError()
+      return false
+    }
+  }
+
+  // Shown at once; on failure the lists are loaded again. Checklist items can't move to another checklist.
+  async function reorderEntries(list: ItineraryList, item: ListItem, entryIds: string[]): Promise<void> {
+    const key = `entries:${item.id}`
+    if (isSaving(key)) {
+      return
+    }
+
+    setSaving(key, true)
+    updateEntries(list.id, item.id, entries => entryIds.map(id => entries.find(entry => entry.id === id)).filter((entry): entry is ChecklistEntry => !!entry))
+    try {
+      await client<unknown>(`${entriesUrl(list, item)}/reorder`, { method: 'PATCH', body: { checklist_item_ids: entryIds } })
+    }
+    catch {
+      await refresh()
+      showError()
+    }
+    finally {
+      setSaving(key, false)
+    }
+  }
+
+  async function moveEntry(list: ItineraryList, item: ListItem, entry: ChecklistEntry, offset: -1 | 1): Promise<void> {
+    const ids = item.checklist_items.map(other => other.id)
+    const from = ids.indexOf(entry.id)
+    const to = from + offset
+    if (from === -1 || to < 0 || to >= ids.length) {
+      return
+    }
+    await reorderEntries(list, item, moveId(ids, from, to))
+  }
+
   return {
     lists,
     pending,
@@ -299,6 +398,12 @@ export function useTripLists(itineraryId: string) {
     deleteItem,
     reorderItems,
     moveItem,
+    addEntry,
+    renameEntry,
+    toggleEntry,
+    deleteEntry,
+    reorderEntries,
+    moveEntry,
   }
 }
 

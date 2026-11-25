@@ -1,7 +1,7 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { injectTripLists, useTripLists } from '~/composables/useTripLists'
-import type { ListsResponse } from '~/types/list'
+import type { ItineraryList, ListsResponse } from '~/types/list'
 import { makeList } from '../../utils/tripFixtures'
 
 const { clientMock, lazyFetchMock, toastAddMock, refreshMock } = vi.hoisted(() => ({
@@ -313,6 +313,138 @@ describe('useTripLists: lists', () => {
 
       expect(clientMock).toHaveBeenCalledWith(`${ITEMS}/n1`, { method: 'DELETE' })
       expect(lists.value[0]!.items.map(item => item.id)).toEqual(['i2'])
+    })
+  })
+
+  describe('checklist items', () => {
+    const ENTRIES = `${URL}/l1/items/c1/checklist`
+    const entry = (id: string, label: string, isChecked: boolean | null, sortOrder: number) =>
+      ({ id, itinerary_list_item_id: 'c1', label, is_checked: isChecked, sort_order: sortOrder })
+    const checklist = {
+      id: 'c1',
+      itinerary_lists_id: 'l1',
+      type: 'checklist' as const,
+      title: 'Packing',
+      content: null,
+      sort_order: 1,
+      place: null,
+      checklist_items: [entry('e1', 'Passport', true, 1), entry('e2', 'Adapter', false, 2)],
+    }
+
+    function deferred() {
+      let resolve: (value: unknown) => void = () => {}
+      const promise = new Promise((done) => {
+        resolve = done
+      })
+      return { promise, resolve }
+    }
+
+    beforeEach(() => {
+      listsRef.value = { data: [makeList('l1', 'Before we go', { items: [checklist] })] }
+    })
+
+    const entries = (lists: Ref<ItineraryList[]>) => lists.value[0]!.items[0]!.checklist_items
+
+    it('adds a checklist item that is not ticked', async () => {
+      clientMock.mockResolvedValue({ data: entry('e3', 'Tickets', null, 3) })
+      const { lists, addEntry } = useTripLists('t1')
+
+      expect(await addEntry(lists.value[0]!, lists.value[0]!.items[0]!, 'Tickets')).toEqual({ ok: true })
+
+      expect(clientMock).toHaveBeenCalledWith(ENTRIES, { method: 'POST', body: { label: 'Tickets' } })
+      expect(entries(lists).map(item => item.id)).toEqual(['e1', 'e2', 'e3'])
+      expect(entries(lists)[2]!.is_checked).toBe(false)
+    })
+
+    it('renames with only the label', async () => {
+      clientMock.mockResolvedValue({ data: entry('e1', 'Passport and visa', true, 1) })
+      const { lists, renameEntry } = useTripLists('t1')
+
+      await renameEntry(lists.value[0]!, lists.value[0]!.items[0]!, entries(lists)[0]!, 'Passport and visa')
+
+      expect(clientMock).toHaveBeenCalledWith(`${ENTRIES}/e1`, { method: 'PATCH', body: { label: 'Passport and visa' } })
+      expect(entries(lists)[0]!.label).toBe('Passport and visa')
+    })
+
+    it('ticks at once and sends only is_checked', async () => {
+      const request = deferred()
+      clientMock.mockReturnValue(request.promise)
+      const { lists, toggleEntry } = useTripLists('t1')
+
+      const saving = toggleEntry(lists.value[0]!, lists.value[0]!.items[0]!, entries(lists)[1]!)
+      expect(entries(lists)[1]!.is_checked).toBe(true)
+      expect(clientMock).toHaveBeenCalledWith(`${ENTRIES}/e2`, { method: 'PATCH', body: { is_checked: true } })
+
+      request.resolve({ data: entry('e2', 'Adapter', true, 2) })
+      await saving
+    })
+
+    it('unticks and shows the error toast when the tick fails', async () => {
+      clientMock.mockRejectedValue(new Error('Network Error'))
+      const { lists, toggleEntry } = useTripLists('t1')
+
+      await toggleEntry(lists.value[0]!, lists.value[0]!.items[0]!, entries(lists)[1]!)
+
+      expect(entries(lists)[1]!.is_checked).toBe(false)
+      expect(toastAddMock).toHaveBeenCalledWith(ERROR_TOAST)
+    })
+
+    it('ignores a second tick while the first is saving', async () => {
+      const request = deferred()
+      clientMock.mockReturnValue(request.promise)
+      const { lists, toggleEntry } = useTripLists('t1')
+
+      const first = toggleEntry(lists.value[0]!, lists.value[0]!.items[0]!, entries(lists)[1]!)
+      await toggleEntry(lists.value[0]!, lists.value[0]!.items[0]!, entries(lists)[1]!)
+      expect(clientMock).toHaveBeenCalledTimes(1)
+
+      request.resolve({ data: entry('e2', 'Adapter', true, 2) })
+      await first
+    })
+
+    it('reorders with checklist_item_ids', async () => {
+      clientMock.mockResolvedValue(undefined)
+      const { lists, reorderEntries } = useTripLists('t1')
+
+      const saving = reorderEntries(lists.value[0]!, lists.value[0]!.items[0]!, ['e2', 'e1'])
+      expect(entries(lists).map(item => item.id)).toEqual(['e2', 'e1'])
+      await saving
+
+      expect(clientMock).toHaveBeenCalledWith(`${ENTRIES}/reorder`, { method: 'PATCH', body: { checklist_item_ids: ['e2', 'e1'] } })
+    })
+
+    it('reloads the lists when reordering checklist items fails', async () => {
+      clientMock.mockRejectedValue(new Error('Network Error'))
+      const { lists, reorderEntries } = useTripLists('t1')
+
+      await reorderEntries(lists.value[0]!, lists.value[0]!.items[0]!, ['e2', 'e1'])
+
+      expect(refreshMock).toHaveBeenCalled()
+      expect(toastAddMock).toHaveBeenCalledWith(ERROR_TOAST)
+    })
+
+    it('moves a checklist item down, and not past the end', async () => {
+      clientMock.mockResolvedValue(undefined)
+      const { lists, moveEntry } = useTripLists('t1')
+
+      await moveEntry(lists.value[0]!, lists.value[0]!.items[0]!, entries(lists)[0]!, 1)
+      expect(clientMock).toHaveBeenCalledWith(`${ENTRIES}/reorder`, { method: 'PATCH', body: { checklist_item_ids: ['e2', 'e1'] } })
+
+      clientMock.mockClear()
+      await moveEntry(lists.value[0]!, lists.value[0]!.items[0]!, entries(lists)[1]!, 1)
+      expect(clientMock).not.toHaveBeenCalled()
+    })
+
+    it('deletes a checklist item after the API confirms, and keeps it when that fails', async () => {
+      clientMock.mockRejectedValue(new Error('Network Error'))
+      const { lists, deleteEntry } = useTripLists('t1')
+      expect(await deleteEntry(lists.value[0]!, lists.value[0]!.items[0]!, entries(lists)[0]!)).toBe(false)
+      expect(entries(lists)).toHaveLength(2)
+
+      clientMock.mockResolvedValue(undefined)
+      expect(await deleteEntry(lists.value[0]!, lists.value[0]!.items[0]!, entries(lists)[0]!)).toBe(true)
+      expect(clientMock).toHaveBeenLastCalledWith(`${ENTRIES}/e1`, { method: 'DELETE' })
+      expect(entries(lists).map(item => item.id)).toEqual(['e2'])
     })
   })
 
