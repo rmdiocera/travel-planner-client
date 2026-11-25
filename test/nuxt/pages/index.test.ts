@@ -1,8 +1,9 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
-import type { DOMWrapper } from '@vue/test-utils'
+import type { DOMWrapper, VueWrapper } from '@vue/test-utils'
 import { mountIndexPage } from '../../utils/mountIndexPage'
+import { menuItems } from '../../utils/menu'
 import ItineraryGrid from '~/components/itinerary/Grid.vue'
 
 const widthRef = ref(768)
@@ -19,7 +20,7 @@ const { clientMock, lazyFetchMock, toastAddMock } = vi.hoisted(() => ({
 }))
 
 const upcomingItinerary = { id: 'i2', name: 'Trip to Kyoto', start_date: '2027-01-15', end_date: '2027-01-20' }
-let upcomingItineraries: Record<string, string>[] = []
+let upcomingItineraries: Record<string, string | null>[] = []
 
 mockNuxtImport('useLazySanctumFetch', () => {
   return (url: string, options?: Record<string, unknown>) => {
@@ -411,15 +412,18 @@ describe('Index page', () => {
       upcomingItineraries = []
     })
 
-    it('sends a PATCH with the edited form for the selected itinerary', async () => {
-      const { wrapper, bodyWrapper } = await mountIndexPage({ openCreateModal: false })
-
-      // Grid's menu is a teleported Nuxt UI dropdown, so emit what its Edit item emits.
+    // Grid's menu is a teleported Nuxt UI dropdown, so emit what its Edit item emits.
+    async function openEditForm(wrapper: VueWrapper, itinerary: Record<string, string | null>) {
       const grid = wrapper.findComponent(ItineraryGrid)
       grid.vm.$emit('isModalOpen', true)
       grid.vm.$emit('isEditing', true)
-      grid.vm.$emit('selectedItinerary', upcomingItinerary)
+      grid.vm.$emit('selectedItinerary', itinerary)
       await nextTick()
+    }
+
+    it('sends a PATCH with the edited form for the selected itinerary', async () => {
+      const { wrapper, bodyWrapper } = await mountIndexPage({ openCreateModal: false })
+      await openEditForm(wrapper, upcomingItinerary)
 
       await bodyWrapper.find('input[name="name"]').setValue('Trip to Kyoto and Nara')
       await bodyWrapper.find('button[data-testid="create-itinerary-btn"]').trigger('click')
@@ -429,6 +433,53 @@ describe('Index page', () => {
         method: 'PATCH',
         body: { name: 'Trip to Kyoto and Nara', start_date: '2027-01-15', end_date: '2027-01-20' },
       })
+    })
+
+    it('shows the saved dates on their own day west of UTC', async () => {
+      vi.stubEnv('TZ', 'America/Los_Angeles')
+      onTestFinished(() => {
+        vi.unstubAllEnvs()
+      })
+
+      const { wrapper, bodyWrapper } = await mountIndexPage({ openCreateModal: false })
+      await openEditForm(wrapper, upcomingItinerary)
+
+      expect(bodyWrapper.find('button[data-testid="select-start-date-btn"] span:not([aria-hidden])').text()).toBe('Jan 15, 2027')
+      expect(bodyWrapper.find('button[data-testid="select-end-date-btn"] span:not([aria-hidden])').text()).toBe('Jan 20, 2027')
+    })
+
+    it('opens the edit form for a trip without dates', async () => {
+      const { wrapper, bodyWrapper } = await mountIndexPage({ openCreateModal: false })
+      await openEditForm(wrapper, { ...upcomingItinerary, start_date: null, end_date: null })
+
+      expect(bodyWrapper.find('button[data-testid="select-start-date-btn"] span:not([aria-hidden])').text()).toBe('Select a date')
+      expect(bodyWrapper.find('button[data-testid="select-end-date-btn"] span:not([aria-hidden])').text()).toBe('Select a date')
+    })
+  })
+
+  describe('Cards without dates', () => {
+    const undatedItinerary = { id: 'i9', name: 'Iceland someday', start_date: null, end_date: null }
+
+    beforeEach(() => {
+      upcomingItineraries = [undatedItinerary]
+    })
+
+    afterEach(() => {
+      upcomingItineraries = []
+    })
+
+    it('says No dates yet on a card without dates', async () => {
+      const { wrapper } = await mountIndexPage({ openCreateModal: false })
+
+      expect(wrapper.text()).toContain('No dates yet')
+      expect(wrapper.text()).not.toContain('Invalid Date')
+    })
+
+    it('keeps Edit available on a card without dates', async () => {
+      const { wrapper } = await mountIndexPage({ openCreateModal: false })
+
+      const edit = menuItems(wrapper, 'itinerary-menu-btn-i9').find(item => item.label === 'Edit')
+      expect(edit?.disabled).toBe(false)
     })
   })
 

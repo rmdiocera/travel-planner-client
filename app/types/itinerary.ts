@@ -1,8 +1,9 @@
 export type Itinerary = {
   id: string
   name: string
-  start_date: Date
-  end_date: Date
+  // "YYYY-MM-DD". Both are null for an unscheduled trip, one that has no dates yet.
+  start_date: string | null
+  end_date: string | null
 }
 
 export type ItineraryResponse = {
@@ -18,5 +19,7 @@ export type ItinerariesGroupedResponse = {
     past: Itinerary[]
     ongoing: Itinerary[]
     upcoming: Itinerary[]
+    // Trips without dates. Optional, so a backend that doesn't send it yet still works.
+    unscheduled?: Itinerary[]
   }
 }

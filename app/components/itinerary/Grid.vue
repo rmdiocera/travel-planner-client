@@ -33,7 +33,8 @@ const items = (itinerary: Itinerary) => [
       emit('isEditing', true)
       emit('selectedItinerary', itinerary)
     },
-    disabled: toCalendarDate(new Date(itinerary.end_date)) < toCalendarDate(new Date()),
+    // A trip without dates isn't past, so it stays editable.
+    disabled: !!itinerary.end_date && toCalendarDate(new Date(itinerary.end_date)) < toCalendarDate(new Date()),
   },
   {
     label: 'Delete',
@@ -73,6 +74,7 @@ const items = (itinerary: Itinerary) => [
           color="primary"
           variant="ghost"
           size="sm"
+          :data-testid="`itinerary-menu-btn-${itinerary.id}`"
           :ui="{ base: 'rounded-full text-white bg-black/25 hover:bg-black/50 cursor-pointer' }"
         />
       </UDropdownMenu>
@@ -81,7 +83,13 @@ const items = (itinerary: Itinerary) => [
           {{ itinerary.name }}
         </p>
         <p class="text-muted text-pretty text-sm flex items-center gap-2">
-          <UIcon name="i-lucide-calendar-1" />{{ formatStartEndDate(new Date(itinerary.start_date), new Date(itinerary.end_date)) }} • {{ dateDiffInDays(new Date(itinerary.start_date), new Date(itinerary.end_date)) }}
+          <UIcon name="i-lucide-calendar-1" />
+          <template v-if="itinerary.start_date && itinerary.end_date">
+            {{ formatStartEndDate(new Date(itinerary.start_date), new Date(itinerary.end_date)) }} • {{ dateDiffInDays(new Date(itinerary.start_date), new Date(itinerary.end_date)) }}
+          </template>
+          <template v-else>
+            No dates yet
+          </template>
         </p>
       </div>
     </div>

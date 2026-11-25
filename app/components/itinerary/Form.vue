@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { CalendarDate } from '@internationalized/date'
-import { getLocalTimeZone, DateFormatter, today } from '@internationalized/date'
+import { getLocalTimeZone, DateFormatter, parseDate, today } from '@internationalized/date'
 import type { FormError } from '@nuxt/ui'
 import type { Itinerary, ItineraryResponse } from '~/types/itinerary'
 
@@ -20,14 +20,16 @@ defineExpose({
   triggerSubmit,
 })
 
+// parseDate reads "YYYY-MM-DD" as that calendar day. new Date() would read it as UTC midnight,
+// which is the previous day west of UTC.
 const startDate = shallowRef<CalendarDate | undefined>(
   props.selectedItinerary?.start_date
-    ? toCalendarDate(new Date(props.selectedItinerary.start_date))
+    ? parseDate(props.selectedItinerary.start_date)
     : undefined,
 )
 const endDate = shallowRef<CalendarDate | undefined>(
   props.selectedItinerary?.end_date
-    ? toCalendarDate(new Date(props.selectedItinerary.end_date))
+    ? parseDate(props.selectedItinerary.end_date)
     : undefined,
 )
 const dateToday = today(getLocalTimeZone())
