@@ -10,7 +10,7 @@ import type { ConfirmDeleteRequest } from '~/composables/tripDialogs'
 import { injectTripLists } from '~/composables/useTripLists'
 
 const tripLists = injectTripLists()
-const { lists, pending, error, refresh } = tripLists
+const { lists, initialLoading, error, refresh } = tripLists
 
 const creating = ref(false)
 const createError = ref('')
@@ -84,7 +84,7 @@ function toggleItem(id: string) {
         />
       </template>
     </EmptyState>
-    <TripListsSkeleton v-else-if="pending" />
+    <TripListsSkeleton v-else-if="initialLoading" />
     <template v-else>
       <EmptyState
         v-if="!lists.length && !creating"

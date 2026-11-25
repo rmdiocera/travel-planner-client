@@ -134,6 +134,41 @@ describe('TripChecklistItem', () => {
     expect(wrapper.text()).toContain('Add a title')
   })
 
+  it('names each checkbox after its item, whether it is ticked or not', async () => {
+    const wrapper = await mountItem()
+
+    expect(wrapper.find('[data-testid="entry-checkbox-e1"]').attributes('aria-label')).toBe('Passport')
+    expect(wrapper.find('[data-testid="entry-checkbox-e2"]').attributes('aria-label')).toBe('Adapter')
+  })
+
+  it('keeps what is typed for the next item while the last one saves', async () => {
+    let finish: (value: unknown) => void = () => {}
+    fakeLists.addEntry.mockReturnValue(new Promise((done) => {
+      finish = done
+    }))
+    const wrapper = await mountItem({ autoAdd: true })
+    const input = wrapper.find('input[data-testid="checklist-item-input"]')
+    await input.setValue('Tickets')
+    await input.trigger('keydown', enter)
+    await input.setValue('Pass')
+
+    finish({ ok: true })
+    await flushPromises()
+
+    expect((wrapper.find('input[data-testid="checklist-item-input"]').element as HTMLInputElement).value).toBe('Pass')
+  })
+
+  it('puts the text back when adding an item fails', async () => {
+    fakeLists.addEntry.mockResolvedValue({ ok: false })
+    const wrapper = await mountItem({ autoAdd: true })
+    const input = wrapper.find('input[data-testid="checklist-item-input"]')
+    await input.setValue('Tickets')
+    await input.trigger('keydown', enter)
+    await flushPromises()
+
+    expect((wrapper.find('input[data-testid="checklist-item-input"]').element as HTMLInputElement).value).toBe('Tickets')
+  })
+
   it('opens the next box after Enter, empty and still focused', async () => {
     const wrapper = await mountItem({ autoAdd: true }, document.body)
     const input = wrapper.find('input[data-testid="checklist-item-input"]')

@@ -267,7 +267,7 @@
         <!-- Days and lists sit side by side from 1024px. Below that they are tabs. Both panels are always rendered
              and CSS shows one, so server rendering and hydration agree whatever the window width. -->
         <div
-          class="sticky top-0 z-10 flex gap-1 border-b border-default bg-default lg:hidden"
+          class="sticky top-(--ui-header-height) z-10 flex gap-1 border-b border-default bg-default lg:hidden"
           role="tablist"
           aria-label="Days and lists"
           data-testid="trip-tabs"
@@ -368,7 +368,7 @@
             id="panel-lists"
             role="tabpanel"
             aria-labelledby="tab-lists"
-            class="lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:self-start lg:overflow-y-auto"
+            class="lg:sticky lg:top-[calc(var(--ui-header-height)+1rem)] lg:max-h-[calc(100vh-var(--ui-header-height)-2rem)] lg:self-start lg:overflow-y-auto"
             :class="activeTab === 'lists' ? '' : 'hidden lg:block'"
             data-testid="lists-panel"
           >

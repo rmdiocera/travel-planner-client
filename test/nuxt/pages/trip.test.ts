@@ -27,6 +27,7 @@ const spotsPending = ref(false)
 const spotsError = ref<Record<string, unknown> | null>(null)
 const listsRef = ref<{ data: Record<string, unknown>[] }>({ data: [] })
 const listsError = ref<Record<string, unknown> | null>(null)
+const listsPending = ref(false)
 
 mockNuxtImport('useLazySanctumFetch', () => {
   return (url: string, options?: Record<string, unknown>) => {
@@ -35,7 +36,7 @@ mockNuxtImport('useLazySanctumFetch', () => {
       return { data: tripRef, pending: tripPending, error: tripError, refresh: tripRefreshMock }
     }
     if (url === '/api/v1/itineraries/t1/lists') {
-      return { data: listsRef, pending: ref(false), error: listsError, refresh: listsRefreshMock }
+      return { data: listsRef, pending: listsPending, error: listsError, refresh: listsRefreshMock }
     }
     return { data: spotsRef, pending: spotsPending, error: spotsError, refresh: spotsRefreshMock }
   }
@@ -76,6 +77,7 @@ describe('Trip page', () => {
     spotsError.value = null
     listsRef.value = { data: [] }
     listsError.value = null
+    listsPending.value = false
     spotsPending.value = false
   })
 
@@ -399,6 +401,9 @@ describe('Trip page', () => {
         const { wrapper } = await mountTripPage()
 
         expect(wrapper.find('[data-testid="trip-tabs"]').classes()).toContain('lg:hidden')
+        // Both stick below the site header, not under it.
+        expect(wrapper.find('[data-testid="trip-tabs"]').classes()).toContain('top-(--ui-header-height)')
+        expect(wrapper.find('[data-testid="lists-panel"]').classes()).toContain('lg:top-[calc(var(--ui-header-height)+1rem)]')
         const days = wrapper.find('[data-testid="days-panel"]')
         const lists = wrapper.find('[data-testid="lists-panel"]')
         expect(days.classes()).not.toContain('hidden')
@@ -546,6 +551,30 @@ describe('Trip page', () => {
 
         expect(bodyWrapper.text()).toContain('its 2 places on days and its 1 list. This cannot be undone.')
       })
+    })
+
+    it('shows the skeleton while the lists load for the first time', async () => {
+      listsRef.value = null as never
+      listsPending.value = true
+      const { wrapper } = await mountTripPage()
+
+      expect(wrapper.find('[data-testid="lists-skeleton"]').exists()).toBe(true)
+    })
+
+    it('keeps the lists, and what is typed in them, on screen while they reload', async () => {
+      listsRef.value = { data: [beforeWeGo] }
+      listsPending.value = true
+      const { wrapper } = await mountTripPage()
+
+      expect(wrapper.find('[data-testid="lists-skeleton"]').exists()).toBe(false)
+      expect(wrapper.findAll('[data-testid="list-card"]')).toHaveLength(1)
+    })
+
+    it('shows a note with no text as an empty note', async () => {
+      listsRef.value = { data: [{ ...beforeWeGo, items: [{ id: 'n7', itinerary_lists_id: 'l1', type: 'note', title: null, content: null, sort_order: 1, place: null, checklist_items: [] }] }] }
+      const { wrapper } = await mountTripPage()
+
+      expect(wrapper.find('[data-testid="note-text-n7"]').text()).toBe('Empty note')
     })
 
     it('shows the lists\' own error with Try again when only the lists fail', async () => {

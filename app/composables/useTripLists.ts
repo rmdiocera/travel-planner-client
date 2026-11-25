@@ -15,11 +15,20 @@ export function useTripLists(itineraryId: string) {
 
   const { data, pending, error, refresh } = useLazySanctumFetch<ListsResponse>(listsUrl)
 
+  // The id of a note that was created but whose text failed to save, by list id.
+  const noteDrafts = new Map<string, string>()
+
   // Local copy, so a change shows at once without touching the fetch's cache. A refresh replaces it.
   const lists = ref<ItineraryList[]>([])
   watch(data, (response) => {
     lists.value = response?.data ?? []
+    // A reload shows what the server has, including an empty note a failed save left behind, so a saved id must not be reused.
+    noteDrafts.clear()
   }, { immediate: true })
+
+  // The skeleton is for the first load only. A refresh also sets pending, and swapping every list for a skeleton
+  // would drop whatever is being typed in them.
+  const initialLoading = computed(() => pending.value && !data.value)
 
   const listCount = computed(() => lists.value.length)
 
@@ -154,8 +163,7 @@ export function useTripLists(itineraryId: string) {
   }
 
   // A new note takes two requests: the API creates it empty, and its text needs a second one.
-  // If the second fails, the created note's id is kept (one per list) so a retry sends only the text.
-  const noteDrafts = new Map<string, string>()
+  // If the second fails, the created note's id is kept (one per list, in noteDrafts) so a retry sends only the text.
 
   async function createNote(list: ItineraryList, content: string): Promise<SaveResult> {
     try {
@@ -380,6 +388,7 @@ export function useTripLists(itineraryId: string) {
   return {
     lists,
     pending,
+    initialLoading,
     error,
     refresh,
     listCount,

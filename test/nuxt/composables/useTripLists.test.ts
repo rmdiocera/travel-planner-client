@@ -217,6 +217,24 @@ describe('useTripLists: lists', () => {
       expect(clientMock).toHaveBeenNthCalledWith(3, `${ITEMS}/n9`, { method: 'DELETE' })
     })
 
+    it('starts a new note from scratch once the lists were loaded again', async () => {
+      clientMock
+        .mockResolvedValueOnce({ data: { id: 'n9', itinerary_lists_id: 'l1', type: 'note', content: null, sort_order: 3 } })
+        .mockRejectedValueOnce(new Error('Network Error'))
+        .mockResolvedValueOnce({ data: { id: 'n10', itinerary_lists_id: 'l1', type: 'note', content: null, sort_order: 4 } })
+        .mockResolvedValueOnce({ data: { id: 'n10', itinerary_lists_id: 'l1', type: 'note', content: 'Hello', sort_order: 4 } })
+      const { lists, createNote } = useTripLists('t1')
+      await createNote(lists.value[0]!, 'Hello')
+
+      // A reload shows the empty note the server kept, so the saved id must not be reused.
+      listsRef.value = { data: [makeList('l1', 'Before we go', { items: [note, placeItem, { ...note, id: 'n9', content: null }] })] }
+      await nextTick()
+      await createNote(lists.value[0]!, 'Hello')
+
+      expect(clientMock).toHaveBeenNthCalledWith(3, ITEMS, { method: 'POST', body: { type: 'note' } })
+      expect(lists.value[0]!.items.filter(item => item.id === 'n10')).toHaveLength(1)
+    })
+
     it('does nothing to discard when no note was started', async () => {
       const { lists, discardNoteDraft } = useTripLists('t1')
 

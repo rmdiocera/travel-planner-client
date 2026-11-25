@@ -61,7 +61,7 @@ async function remove() {
     <TripDragGrip />
     <UCheckbox
       :model-value="!!entry.is_checked"
-      :aria-label="`${entry.label}, ticked`"
+      :aria-label="entry.label"
       :data-testid="`entry-checkbox-${entry.id}`"
       @update:model-value="lists.toggleEntry(list, item, entry)"
     />

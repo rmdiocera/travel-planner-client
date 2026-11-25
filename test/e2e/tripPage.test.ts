@@ -114,6 +114,8 @@ describe('Trip page API', () => {
       const response = await $fetch<ListItemResponse>(`${base()}/lists/${listId}/items`, { method: 'POST', body: { type: 'place', place_id: placeId } })
       placeItemId = response.data.id
 
+      // The page shows the place right away, so the create response must carry it.
+      expect(response.data.place?.place.name).toBe('E2E trip page place')
       expect(response.data.place?.marked_visited).toBe(false)
     })
 

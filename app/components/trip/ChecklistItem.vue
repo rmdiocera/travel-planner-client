@@ -73,12 +73,17 @@ async function addEntry() {
     return
   }
 
+  // The box is emptied when the item is sent, so what is typed for the next one while it saves is kept.
+  // If sending fails, the text goes back unless something new was typed.
   addSaving.value = true
+  newLabel.value = ''
   const result = await lists.addEntry(props.list, props.item, label)
   addSaving.value = false
   if (result.ok) {
-    newLabel.value = ''
     focusAdder()
+  }
+  else if (!newLabel.value) {
+    newLabel.value = label
   }
 }
 

@@ -95,7 +95,7 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [
         :data-testid="`note-text-${item.id}`"
         @click="editing = true"
       >
-        {{ item.content }}
+        {{ item.content || 'Empty note' }}
       </button>
       <UDropdownMenu
         :items="menuItems"
