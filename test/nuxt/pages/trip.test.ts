@@ -1,6 +1,7 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
+import TripPlaceSearch from '~/components/trip/PlaceSearch.vue'
 import { mountTripPage } from '../../utils/mountTripPage'
 import { menuItems, selectMenuItem } from '../../utils/menu'
 import { makeSpot } from '../../utils/tripFixtures'
@@ -239,6 +240,73 @@ describe('Trip page', () => {
       expect(toastAddMock).toHaveBeenCalledWith(ERROR_TOAST)
       expect(navigateToMock).not.toHaveBeenCalled()
       expect(wrapper.find('[data-testid="trip-name"]').text()).toBe('Japan with friends')
+    })
+  })
+
+  describe('Adding places', () => {
+    const ameyoko = { id: 'p1', name: 'Ameyoko Market', city: 'Tokyo', details: '', address: '', country: 'Japan', website: '', phone: '', tags: [] }
+    const meiji = { ...ameyoko, id: 'p2', name: 'Meiji Jingu' }
+
+    async function openSearchForDay2() {
+      const mounted = await mountTripPage()
+      await mounted.wrapper.findAll('[data-testid="add-place-btn"]')[1]!.trigger('click')
+      await flushPromises()
+      return mounted
+    }
+
+    it('opens the search for a day', async () => {
+      const { bodyWrapper } = await openSearchForDay2()
+
+      expect(bodyWrapper.text()).toContain('Add places to day 2')
+      expect(bodyWrapper.text()).toContain('Sat 13 Mar')
+      expect(bodyWrapper.find('[data-testid="place-search-input"]').exists()).toBe(true)
+    })
+
+    it('adds the stop through useTripDays', async () => {
+      clientMock.mockResolvedValue({ data: makeSpot('s9', '2027-03-13', { place_id: 'p1' }) })
+      const { wrapper } = await openSearchForDay2()
+
+      const added = await wrapper.findComponent(TripPlaceSearch).props('add')(ameyoko)
+      await flushPromises()
+
+      expect(added).toBe(true)
+      expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/t1/spots', {
+        method: 'POST',
+        body: { place_id: 'p1', visit_date: '2027-03-13' },
+      })
+      expect(wrapper.findAll('[data-testid="trip-day"]')[1]!.text()).toContain('Place s9')
+    })
+
+    it('toasts what was added when Done is pressed', async () => {
+      const { wrapper, bodyWrapper } = await openSearchForDay2()
+      const search = wrapper.findComponent(TripPlaceSearch)
+      search.vm.$emit('added', ameyoko)
+      search.vm.$emit('added', meiji)
+      await bodyWrapper.find('[data-testid="place-search-done-btn"]').trigger('click')
+      await flushPromises()
+
+      expect(toastAddMock).toHaveBeenCalledWith({
+        title: 'Added 2 places to day 2',
+        icon: 'i-lucide-circle-check',
+        description: 'Ameyoko Market, Meiji Jingu',
+      })
+    })
+
+    it('says place, not places, for one', async () => {
+      const { wrapper, bodyWrapper } = await openSearchForDay2()
+      wrapper.findComponent(TripPlaceSearch).vm.$emit('added', ameyoko)
+      await bodyWrapper.find('[data-testid="place-search-done-btn"]').trigger('click')
+      await flushPromises()
+
+      expect(toastAddMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Added 1 place to day 2' }))
+    })
+
+    it('shows no toast when nothing was added', async () => {
+      const { bodyWrapper } = await openSearchForDay2()
+      await bodyWrapper.find('[data-testid="place-search-done-btn"]').trigger('click')
+      await flushPromises()
+
+      expect(toastAddMock).not.toHaveBeenCalled()
     })
   })
 

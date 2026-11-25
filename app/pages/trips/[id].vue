@@ -71,6 +71,56 @@
           </div>
         </template>
       </Slideover>
+      <Modal
+        v-if="!isMobile"
+        v-model:open="searchOpen"
+        :title="`Add places to ${searchLabel}`"
+        :description="searchDay ? formatDayDate(searchDay.date) : undefined"
+      >
+        <template #form>
+          <TripPlaceSearch
+            :target-label="searchLabel"
+            :add="addToDay"
+            :is-on-target="isOnSearchDay"
+            @added="addedPlaceNames.push($event.name)"
+          />
+        </template>
+        <template #action>
+          <div class="flex w-full justify-end">
+            <UButton
+              label="Done"
+              color="primary"
+              data-testid="place-search-done-btn"
+              @click="searchOpen = false"
+            />
+          </div>
+        </template>
+      </Modal>
+      <Slideover
+        v-else
+        v-model:open="searchOpen"
+        side="bottom"
+        :title="`Add places to ${searchLabel}`"
+        :description="searchDay ? formatDayDate(searchDay.date) : undefined"
+      >
+        <template #form>
+          <TripPlaceSearch
+            :target-label="searchLabel"
+            :add="addToDay"
+            :is-on-target="isOnSearchDay"
+            @added="addedPlaceNames.push($event.name)"
+          />
+        </template>
+        <template #action>
+          <UButton
+            block
+            label="Done"
+            color="primary"
+            data-testid="place-search-done-sheet-btn"
+            @click="searchOpen = false"
+          />
+        </template>
+      </Slideover>
       <ConfirmModal
         v-model:open="confirmOpen"
         title="Delete this trip?"
@@ -201,6 +251,8 @@
               :key="day.date"
               :day="day"
               :is-today="day.date === today"
+              :highlighted-ids="highlightedIds"
+              @add-place="openSearch"
             />
           </div>
           <TripOutsideSection
@@ -223,9 +275,12 @@ import TripDaysSkeleton from '~/components/trip/DaysSkeleton.vue'
 import TripDayCard from '~/components/trip/DayCard.vue'
 import TripHeader from '~/components/trip/Header.vue'
 import TripOutsideSection from '~/components/trip/OutsideSection.vue'
+import TripPlaceSearch from '~/components/trip/PlaceSearch.vue'
 import { useWindowSize } from '@vueuse/core'
 import { tripDaysKey, useTripDays } from '~/composables/useTripDays'
 import type { Itinerary, ItineraryResponse } from '~/types/itinerary'
+import type { SearchPlace } from '~/composables/usePlaceSearch'
+import { formatDayDate } from '~/utils/trip/days'
 import { tripDeleteTail } from '~/utils/trip/deleteText'
 
 definePageMeta({
@@ -293,6 +348,49 @@ async function handleDelete() {
     isLoading.value = false
   }
 }
+
+// Adding places to a day: the search stays open until Done, and the toast then says what was added.
+const searchOpen = ref(false)
+const searchDate = ref('')
+const addedPlaceNames = ref<string[]>([])
+const addedStopIds = ref<string[]>([])
+const highlightedIds = ref<string[]>([])
+const searchDay = computed(() => tripDays.value.find(day => day.date === searchDate.value))
+const searchLabel = computed(() => searchDay.value ? `day ${searchDay.value.number}` : '')
+
+function openSearch(day: { date: string }) {
+  searchDate.value = day.date
+  addedPlaceNames.value = []
+  addedStopIds.value = []
+  searchOpen.value = true
+}
+
+async function addToDay(place: SearchPlace) {
+  const stop = await days.addStop(place.id, searchDate.value)
+  if (stop) {
+    addedStopIds.value.push(stop.id)
+  }
+  return !!stop
+}
+
+function isOnSearchDay(placeId: string) {
+  return !!searchDay.value?.stops.some(stop => stop.place_id === placeId)
+}
+
+watch(searchOpen, (open) => {
+  if (open || !addedPlaceNames.value.length) {
+    return
+  }
+
+  const count = addedPlaceNames.value.length
+  showToast(`Added ${count} ${count === 1 ? 'place' : 'places'} to ${searchLabel.value}`, 'i-lucide-circle-check', addedPlaceNames.value.join(', '))
+
+  // The new stops are lit for a moment, so the traveller can see where they landed.
+  highlightedIds.value = [...addedStopIds.value]
+  setTimeout(() => {
+    highlightedIds.value = []
+  }, 2000)
+})
 
 const hasDates = computed(() => !!trip.value?.start_date && !!trip.value?.end_date)
 

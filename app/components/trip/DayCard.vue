@@ -6,6 +6,8 @@ import { formatDayDate } from '~/utils/trip/days'
 defineProps<{
   day: TripDayWithStops
   isToday: boolean
+  // Stops lit for a moment after they were added.
+  highlightedIds?: string[]
 }>()
 
 defineEmits<{
@@ -42,6 +44,7 @@ defineEmits<{
         :key="stop.id"
         :stop="stop"
         variant="day"
+        :highlighted="highlightedIds?.includes(stop.id)"
       />
     </div>
     <UButton

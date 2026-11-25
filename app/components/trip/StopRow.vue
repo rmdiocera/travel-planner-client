@@ -10,6 +10,7 @@ const props = defineProps<{
   stop: Spot
   // 'outside' is a stop on a date that isn't a day of the trip: its old date stands where its times would be.
   variant: 'day' | 'outside'
+  highlighted?: boolean
 }>()
 
 const days = injectTripDays()
@@ -27,7 +28,8 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [[
 
 <template>
   <div
-    class="flex items-center gap-3 border-t border-default py-3 first:border-t-0"
+    class="flex items-center gap-3 border-t border-default py-3 transition-colors first:border-t-0"
+    :class="highlighted ? 'bg-primary/10' : ''"
     data-testid="trip-stop"
   >
     <div class="w-14 shrink-0 text-sm tabular-nums">
