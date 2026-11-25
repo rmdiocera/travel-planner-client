@@ -129,6 +129,171 @@ describe('useTripDays', () => {
     })
   })
 
+  describe('changing a stop', () => {
+    const s1 = makeSpot('s1', '2027-03-13', { place_id: 'p1', start_time: '08:00:00', end_time: '10:00:00' })
+    const s2 = makeSpot('s2', '2027-03-13', { place_id: 'p2' })
+    const s3 = makeSpot('s3', '2027-03-15', { place_id: 'p1' })
+
+    beforeEach(() => {
+      spotsRef.value = { data: { '2027-03-13': [s1, s2], '2027-03-15': [s3] } }
+      trip.value = { id: 't1', name: 'Japan', start_date: '2027-03-12', end_date: '2027-03-18' }
+    })
+
+    function deferred() {
+      let resolve: (value: unknown) => void = () => {}
+      let reject: (reason?: unknown) => void = () => {}
+      const promise = new Promise((done, fail) => {
+        resolve = done
+        reject = fail
+      })
+      return { promise, resolve, reject }
+    }
+
+    it('sends both times with the visit date', async () => {
+      clientMock.mockResolvedValue({ data: { ...s2, start_time: '11:00:00', end_time: '12:00:00' } })
+      const { days, setTimes } = useTripDays('t1', trip)
+
+      expect(await setTimes(s2, '11:00', '12:00')).toBe(true)
+
+      expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/t1/spots/s2', {
+        method: 'PATCH',
+        body: { visit_date: '2027-03-13', start_time: '11:00', end_time: '12:00' },
+      })
+      expect(days.value[1]!.stops.find(stop => stop.id === 's2')?.start_time).toBe('11:00:00')
+    })
+
+    it('reloads the days when the start time changes, and not when only the end changes', async () => {
+      const { setTimes } = useTripDays('t1', trip)
+
+      clientMock.mockResolvedValue({ data: { ...s1, start_time: '08:00:00', end_time: '11:00:00' } })
+      await setTimes(s1, '08:00', '11:00')
+      expect(refreshMock).not.toHaveBeenCalled()
+
+      clientMock.mockResolvedValue({ data: { ...s1, start_time: '09:00:00', end_time: '10:00:00' } })
+      await setTimes(s1, '09:00', '10:00')
+      expect(refreshMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('shows the error toast and returns false when saving times fails', async () => {
+      clientMock.mockRejectedValue(new Error('Network Error'))
+      const { setTimes } = useTripDays('t1', trip)
+
+      expect(await setTimes(s1, '09:00', '10:00')).toBe(false)
+      expect(toastAddMock).toHaveBeenCalledWith(ERROR_TOAST)
+    })
+
+    it('marks a stop visited at once and sends it', async () => {
+      const request = deferred()
+      clientMock.mockReturnValue(request.promise)
+      const { days, setVisited, isSaving } = useTripDays('t1', trip)
+
+      const saving = setVisited(s1, true)
+      expect(days.value[1]!.stops[0]!.marked_visited).toBe(true)
+      expect(isSaving('s1')).toBe(true)
+      expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/t1/spots/s1', {
+        method: 'PATCH',
+        body: { visit_date: '2027-03-13', marked_visited: true },
+      })
+
+      request.resolve({ data: { ...s1, marked_visited: true } })
+      await saving
+      expect(isSaving('s1')).toBe(false)
+    })
+
+    it('puts visited back and shows the error toast when it fails', async () => {
+      clientMock.mockRejectedValue(new Error('Network Error'))
+      const { days, setVisited } = useTripDays('t1', trip)
+
+      await setVisited(s1, true)
+
+      expect(days.value[1]!.stops[0]!.marked_visited).toBe(false)
+      expect(toastAddMock).toHaveBeenCalledWith(ERROR_TOAST)
+    })
+
+    it('moves a stop to another day, keeping its times, and reloads the days', async () => {
+      clientMock.mockResolvedValue({ data: { ...s1, visit_date: '2027-03-14T00:00:00.000000Z' } })
+      const { moveToDay } = useTripDays('t1', trip)
+
+      expect(await moveToDay(s1, '2027-03-14')).toBe(true)
+
+      expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/t1/spots/s1', {
+        method: 'PATCH',
+        body: { visit_date: '2027-03-14', start_time: '08:00', end_time: '10:00' },
+      })
+      expect(refreshMock).toHaveBeenCalled()
+    })
+
+    it('reorders a day at once and sends every stop of it', async () => {
+      const request = deferred()
+      clientMock.mockReturnValue(request.promise)
+      const { days, reorderDay } = useTripDays('t1', trip)
+
+      const saving = reorderDay('2027-03-13', ['s2', 's1'])
+      expect(days.value[1]!.stops.map(stop => stop.id)).toEqual(['s2', 's1'])
+      expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/t1/spots/reorder', {
+        method: 'PATCH',
+        body: { visit_date: '2027-03-13', spot_ids: ['s2', 's1'] },
+      })
+
+      request.resolve(undefined)
+      await saving
+    })
+
+    it('reloads the day and shows the error toast when reordering fails', async () => {
+      clientMock.mockRejectedValue(new Error('Network Error'))
+      const { reorderDay } = useTripDays('t1', trip)
+
+      await reorderDay('2027-03-13', ['s2', 's1'])
+
+      expect(refreshMock).toHaveBeenCalled()
+      expect(toastAddMock).toHaveBeenCalledWith(ERROR_TOAST)
+    })
+
+    it('ignores a second reorder of the same day while the first is saving', async () => {
+      const request = deferred()
+      clientMock.mockReturnValue(request.promise)
+      const { reorderDay } = useTripDays('t1', trip)
+
+      const first = reorderDay('2027-03-13', ['s2', 's1'])
+      await reorderDay('2027-03-13', ['s1', 's2'])
+      expect(clientMock).toHaveBeenCalledTimes(1)
+
+      request.resolve(undefined)
+      await first
+    })
+
+    it('moves a stop down with moveStop, and not past the end', async () => {
+      clientMock.mockResolvedValue(undefined)
+      const { moveStop } = useTripDays('t1', trip)
+
+      await moveStop(s1, 1)
+      expect(clientMock).toHaveBeenCalledWith('/api/v1/itineraries/t1/spots/reorder', {
+        method: 'PATCH',
+        body: { visit_date: '2027-03-13', spot_ids: ['s2', 's1'] },
+      })
+
+      clientMock.mockClear()
+      await moveStop(s3, 1)
+      expect(clientMock).not.toHaveBeenCalled()
+    })
+
+    it('flags a day whose times are out of order', () => {
+      spotsRef.value = { data: { '2027-03-13': [s1, makeSpot('s4', '2027-03-13', { start_time: '07:00:00' })] } }
+      const { days } = useTripDays('t1', trip)
+
+      expect(days.value[1]!.outOfOrder).toBe(true)
+      expect(days.value[0]!.outOfOrder).toBe(false)
+    })
+
+    it('lists the days a place is on, and not days outside the trip', () => {
+      const { daysWithPlace } = useTripDays('t1', trip)
+      expect(daysWithPlace('p1')).toEqual([2, 4])
+
+      trip.value = { id: 't1', name: 'Japan', start_date: '2027-03-12', end_date: '2027-03-14' }
+      expect(daysWithPlace('p1')).toEqual([2])
+    })
+  })
+
   it('throws when it was not provided', () => {
     expect(() => injectTripDays()).toThrow('useTripDays was not provided')
   })

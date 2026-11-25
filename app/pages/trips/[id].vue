@@ -11,6 +11,7 @@
           <ItineraryForm
             ref="itineraryForm"
             :selected-itinerary="trip ?? undefined"
+            :stop-dates="stopDates"
             @loading="isLoading = $event"
             @is-modal-open="editOpen = $event"
             @itinerary-updated="mergeUpdatedTrip($event)"
@@ -46,6 +47,7 @@
           <ItineraryForm
             ref="itineraryForm"
             :selected-itinerary="trip ?? undefined"
+            :stop-dates="stopDates"
             @loading="isLoading = $event"
             @is-modal-open="editOpen = $event"
             @itinerary-updated="mergeUpdatedTrip($event)"
@@ -121,6 +123,65 @@
             color="primary"
             data-testid="place-search-done-sheet-btn"
             @click="searchOpen = false"
+          />
+        </template>
+      </Slideover>
+      <Modal
+        v-if="!isMobile"
+        v-model:open="dayPickerOpen"
+        :dismissible="!isMoving"
+        title="Move to another day"
+        :description="dayPickerStop?.place.name"
+      >
+        <template #form>
+          <TripDayPicker
+            v-model:selected="pickedDate"
+            :disabled-date="dayPickerStop ? visitDate(dayPickerStop) : undefined"
+          />
+        </template>
+        <template #action>
+          <div class="flex w-full justify-end gap-2">
+            <UButton
+              label="Cancel"
+              color="neutral"
+              variant="outline"
+              :disabled="isMoving"
+              @click="dayPickerOpen = false"
+            />
+            <UButton
+              :label="pickedDayLabel"
+              color="primary"
+              :disabled="!pickedDate"
+              :loading="isMoving"
+              data-testid="day-picker-confirm-btn"
+              @click="confirmMove"
+            />
+          </div>
+        </template>
+      </Modal>
+      <Slideover
+        v-else
+        v-model:open="dayPickerOpen"
+        :dismissible="!isMoving"
+        side="bottom"
+        title="Move to another day"
+        :description="dayPickerStop?.place.name"
+      >
+        <template #form>
+          <TripDayPicker
+            v-model:selected="pickedDate"
+            :disabled-date="dayPickerStop ? visitDate(dayPickerStop) : undefined"
+          />
+        </template>
+        <template #action>
+          <UButton
+            block
+            :label="pickedDayLabel"
+            color="primary"
+            :disabled="!pickedDate"
+            :loading="isMoving"
+            data-testid="day-picker-confirm-sheet-btn"
+            @click="confirmMove"
           />
         </template>
       </Slideover>
@@ -218,7 +279,7 @@
             />
           </template>
         </EmptyState>
-        <TripDaysSkeleton v-else-if="daysPending" />
+        <TripDaysSkeleton v-else-if="daysInitialLoading" />
         <template v-else>
           <UAlert
             v-if="outside.length"
@@ -255,12 +316,16 @@
               :day="day"
               :is-today="day.date === today"
               :highlighted-ids="highlightedIds"
+              :open-stop-id="openStopId"
               @add-place="openSearch"
+              @toggle-stop="toggleStop"
             />
           </div>
           <TripOutsideSection
             v-if="outside.length"
             :stops="outside"
+            :open-stop-id="openStopId"
+            @toggle-stop="toggleStop"
           />
         </template>
       </template>
@@ -276,14 +341,18 @@ import Modal from '~/components/ui/Modal.vue'
 import Slideover from '~/components/ui/Slideover.vue'
 import TripDaysSkeleton from '~/components/trip/DaysSkeleton.vue'
 import TripDayCard from '~/components/trip/DayCard.vue'
+import TripDayPicker from '~/components/trip/DayPicker.vue'
 import TripHeader from '~/components/trip/Header.vue'
 import TripOutsideSection from '~/components/trip/OutsideSection.vue'
 import TripPlaceSearch from '~/components/trip/PlaceSearch.vue'
 import { useWindowSize } from '@vueuse/core'
+import { tripDialogsKey } from '~/composables/tripDialogs'
+import type { DayPickerRequest } from '~/composables/tripDialogs'
 import { tripDaysKey, useTripDays } from '~/composables/useTripDays'
 import type { Itinerary, ItineraryResponse } from '~/types/itinerary'
 import type { SearchPlace } from '~/composables/usePlaceSearch'
-import { formatDayDate } from '~/utils/trip/days'
+import type { Spot } from '~/types/spot'
+import { formatDayDate, visitDate } from '~/utils/trip/days'
 import { tripDeleteTail } from '~/utils/trip/deleteText'
 
 definePageMeta({
@@ -307,7 +376,7 @@ watch(tripData, (response) => {
 const days = useTripDays(id, trip)
 provide(tripDaysKey, days)
 // Destructured because refs nested in an object aren't unwrapped in the template.
-const { pending: daysPending, error: daysError, refresh: refreshDays, days: tripDays, outside, stopCount } = days
+const { pending: daysPending, initialLoading: daysInitialLoading, error: daysError, refresh: refreshDays, days: tripDays, outside, stopCount } = days
 
 const { width } = useWindowSize()
 const isMobile = computed(() => width.value < 768)
@@ -402,6 +471,45 @@ watch(searchOpen, (open) => {
     highlightedIds.value = []
   }, 2000)
 })
+
+// The day picker: where a stop can be moved to. Components deep in the page ask for it through tripDialogs.
+const dayPickerOpen = ref(false)
+const dayPickerStop = ref<Spot | null>(null)
+const pickedDate = ref<string | null>(null)
+const isMoving = ref(false)
+
+provide(tripDialogsKey, {
+  openDayPicker(request: DayPickerRequest) {
+    dayPickerStop.value = request.stop
+    pickedDate.value = null
+    dayPickerOpen.value = true
+  },
+})
+
+const pickedDayLabel = computed(() => {
+  const day = tripDays.value.find(tripDay => tripDay.date === pickedDate.value)
+  return day ? `Move to day ${day.number}` : 'Move'
+})
+
+async function confirmMove() {
+  if (!dayPickerStop.value || !pickedDate.value) {
+    return
+  }
+
+  isMoving.value = true
+  await days.moveToDay(dayPickerStop.value, pickedDate.value)
+  isMoving.value = false
+  dayPickerOpen.value = false
+}
+
+// One stop is open at a time in the days column.
+const openStopId = ref<string | null>(null)
+function toggleStop(id: string) {
+  openStopId.value = openStopId.value === id ? null : id
+}
+
+// Every stop's date, for Edit trip's warning about stops that new dates would leave outside the trip.
+const stopDates = computed(() => [...tripDays.value.flatMap(day => day.stops), ...outside.value].map(visitDate))
 
 const hasDates = computed(() => !!trip.value?.start_date && !!trip.value?.end_date)
 

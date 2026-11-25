@@ -55,3 +55,11 @@ export function tripDateLine(start: string | null, end: string | null): string {
   const endDate = parseDate(end).toDate(getLocalTimeZone())
   return `${formatStartEndDate(startDate, endDate)} • ${dateDiffInDays(startDate, endDate)}`
 }
+
+// How many "YYYY-MM-DD" dates fall outside start to end. All of them when the trip has no dates.
+export function countOutside(dates: string[], start: string | null, end: string | null): number {
+  if (!start || !end) {
+    return dates.length
+  }
+  return dates.filter(date => date < start || date > end).length
+}
