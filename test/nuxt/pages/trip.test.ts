@@ -1,10 +1,12 @@
-import { mockNuxtImport } from '@nuxt/test-utils/runtime'
+import { mockComponent, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import TripPlaceSearch from '~/components/trip/PlaceSearch.vue'
 import { mountTripPage } from '../../utils/mountTripPage'
 import { menuItems, selectMenuItem } from '../../utils/menu'
 import { makePlace, makeSpot } from '../../utils/tripFixtures'
+
+mockComponent('UCarousel', () => import('../../utils/carouselStub'))
 
 const widthRef = ref(1024)
 
@@ -730,6 +732,41 @@ describe('Trip page', () => {
       const name = wrapper.find('[data-testid="list-place-toggle-i1"] p')
       expect(name.text()).toBe('Ameyoko Market')
       expect(name.classes()).toEqual(expect.arrayContaining(['line-clamp-2', 'wrap-anywhere']))
+    })
+
+    describe('photo', () => {
+      const photos = [1, 2].map(id => ({ id, path: `places/${id}.jpg`, place_id: 'p1', url: `http://localhost/images/places/${id}.jpg` }))
+      const photoItem = { ...placeItem, place: { ...placeItem.place, place: makePlace({ id: 'p1', name: 'Ameyoko Market', images: photos }) } }
+
+      it('keeps a list place\'s photo out of its toggle button', async () => {
+        listsRef.value = { data: [list([photoItem])] }
+        const { wrapper } = await mountTripPage()
+        await flushPromises()
+
+        const photo = wrapper.find('[data-testid="list-place-i1"] [data-testid="place-photo-btn"]')
+        expect(photo.exists()).toBe(true)
+        expect(photo.element.closest('[data-testid="list-place-toggle-i1"]')).toBeNull()
+      })
+
+      it('opens the viewer, not the list place, when its photo is clicked', async () => {
+        listsRef.value = { data: [list([photoItem])] }
+        const { wrapper, bodyWrapper } = await mountTripPage()
+        await flushPromises()
+
+        await wrapper.find('[data-testid="list-place-i1"] [data-testid="place-photo-btn"]').trigger('click')
+        await flushPromises()
+
+        expect(wrapper.find('[data-testid="list-place-toggle-i1"]').attributes('aria-expanded')).toBe('false')
+        expect(bodyWrapper.find('[data-testid="photo-viewer"]').exists()).toBe(true)
+      })
+
+      it('shows the count chip on a list place with several photos', async () => {
+        listsRef.value = { data: [list([photoItem])] }
+        const { wrapper } = await mountTripPage()
+        await flushPromises()
+
+        expect(wrapper.find('[data-testid="list-place-i1"] [data-testid="place-photo-chip"]').text()).toBe('2')
+      })
     })
 
     it('adds a checklist from + Checklist, and opens its next box', async () => {

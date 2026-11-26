@@ -164,20 +164,21 @@ const inlineTime = computed<string | null>(() => {
             Visited
           </p>
         </div>
-        <span class="relative">
-          <TripPlacePhoto :place="stop.place" />
-          <span
-            v-if="stop.marked_visited"
-            class="absolute -right-1 -top-1 flex size-5.5 items-center justify-center rounded-full bg-primary text-inverted md:size-6"
-            data-testid="stop-visited-badge"
-          >
-            <UIcon
-              name="i-lucide-check"
-              class="size-3.5 md:size-4"
-            />
-          </span>
-        </span>
       </button>
+      <!-- The photo is its own button (it opens the photo viewer), so it sits beside the toggle, not inside it. -->
+      <span class="relative shrink-0">
+        <TripPlacePhoto :place="stop.place" />
+        <span
+          v-if="stop.marked_visited"
+          class="pointer-events-none absolute -right-1 -top-1 flex size-5.5 items-center justify-center rounded-full bg-primary text-inverted md:size-6"
+          data-testid="stop-visited-badge"
+        >
+          <UIcon
+            name="i-lucide-check"
+            class="size-3.5 md:size-4"
+          />
+        </span>
+      </span>
       <UDropdownMenu
         :items="menuItems"
         :content="{ align: 'end', sideOffset: 4 }"
