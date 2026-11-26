@@ -84,6 +84,10 @@ _Avoid_: Completed, checked in
 An entry in Dayfarer's own list of places, which stops and list places point to.
 _Avoid_: Location, venue, attraction
 
+**Photo viewer**:
+What opens when a traveller clicks a place's photo on the trip page: all of that place's photos, one at a time, so they can look at the place without leaving Dayfarer.
+_Avoid_: Gallery, lightbox
+
 ### Lists
 
 **List**:
