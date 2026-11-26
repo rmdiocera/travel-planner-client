@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { mountSuspended } from '@nuxt/test-utils/runtime'
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { mockComponent, mountSuspended } from '@nuxt/test-utils/runtime'
+import { DOMWrapper, flushPromises } from '@vue/test-utils'
 import TripStopRow from '~/components/trip/StopRow.vue'
 import { tripDialogsKey } from '~/composables/tripDialogs'
 import { tripDaysKey } from '~/composables/useTripDays'
@@ -7,6 +8,10 @@ import type { Spot } from '~/types/spot'
 import { formatDayDate } from '~/utils/trip/days'
 import { mapsUrl } from '~/utils/trip/maps'
 import { makePlace, makeSpot } from '../../utils/tripFixtures'
+
+mockComponent('UCarousel', () => import('../../utils/carouselStub'))
+
+const twoPhotos = [1, 2].map(id => ({ id, path: `places/${id}.jpg`, place_id: 'p1', url: `http://localhost/images/places/${id}.jpg` }))
 
 const fakeDays = {
   days: ref([{ date: '2027-03-13', number: 2, stops: [], outOfOrder: false }]),
@@ -237,6 +242,31 @@ describe('TripStopRow', () => {
 
       const badge = wrapper.find('[data-testid="stop-visited-badge"]').element
       expect(badge.parentElement!.querySelector('[data-testid="place-photo-placeholder"]')).not.toBeNull()
+    })
+
+    it('keeps the photo out of the toggle button', async () => {
+      const wrapper = await mountRow(makeSpot('s1', '2027-03-13', { place: makePlace({ images: twoPhotos }) }))
+
+      const photo = wrapper.find('[data-testid="place-photo-btn"]')
+      expect(photo.exists()).toBe(true)
+      expect(photo.element.closest('[data-testid="stop-toggle-s1"]')).toBeNull()
+    })
+
+    it('opens the viewer, not the stop, when the photo is clicked', async () => {
+      const wrapper = await mountRow(makeSpot('s1', '2027-03-13', { place: makePlace({ images: twoPhotos }) }))
+      onTestFinished(() => wrapper.unmount())
+
+      await wrapper.find('[data-testid="place-photo-btn"]').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.emitted('toggle')).toBeUndefined()
+      expect(new DOMWrapper(document.body).find('[data-testid="photo-viewer"]').exists()).toBe(true)
+    })
+
+    it('lets a click on the visited tick reach the photo', async () => {
+      const wrapper = await mountRow(makeSpot('s1', '2027-03-13', { marked_visited: true }))
+
+      expect(wrapper.find('[data-testid="stop-visited-badge"]').classes()).toContain('pointer-events-none')
     })
   })
 })

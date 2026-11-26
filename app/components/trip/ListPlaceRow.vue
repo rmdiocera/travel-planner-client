@@ -115,8 +115,9 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
               {{ place.details }}
             </p>
           </div>
-          <TripPlacePhoto :place="place" />
         </button>
+        <!-- The photo is its own button (it opens the photo viewer), so it sits beside the toggle, not inside it. -->
+        <TripPlacePhoto :place="place" />
       </template>
       <UDropdownMenu
         :items="menuItems"
