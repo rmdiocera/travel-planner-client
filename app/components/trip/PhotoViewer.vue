@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { PlaceImage } from '~/types/image'
 import type { NestedPlace } from '~/types/place'
 
 const props = defineProps<{
@@ -13,6 +14,15 @@ const strip = useTemplateRef('strip')
 const images = computed(() => props.place.images)
 // One photo has nothing to flip through, so it gets no arrows, counter or strip.
 const multiple = computed(() => images.value.length > 1)
+
+// A file can be missing from the API's storage. A missing photo shows a pin on its slide and in the strip.
+const missing = ref<number[]>([])
+const isMissing = (image: PlaceImage) => !image.url || missing.value.includes(image.id)
+function markMissing(image: PlaceImage) {
+  if (!missing.value.includes(image.id)) {
+    missing.value.push(image.id)
+  }
+}
 
 // The modal unmounts its content when it closes, so the carousel starts at the first photo again; this keeps the counter in step.
 watch(open, (isOpen) => {
@@ -30,7 +40,27 @@ function showPhoto(index: number) {
   carousel.value?.emblaApi?.scrollTo(index)
 }
 
-const arrowClass = 'bg-white/90 text-neutral-800 shadow-sm hover:bg-white'
+// The carousel only hears the arrow keys while it has focus. After a click on a small photo the focus is on that button,
+// so the keys are handled here too; a key pressed inside the carousel is left to the carousel, or it would move twice.
+function onKeydown(event: KeyboardEvent) {
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+    return
+  }
+  const root = carousel.value?.$el as HTMLElement | undefined
+  if (root?.contains(event.target as Node)) {
+    return
+  }
+  event.preventDefault()
+  if (event.key === 'ArrowLeft') {
+    carousel.value?.emblaApi?.scrollPrev()
+  }
+  else {
+    carousel.value?.emblaApi?.scrollNext()
+  }
+}
+
+// Nuxt UI's outline button turns white on white in focus (dark mode) and dark when pressed or disabled; these keep it a light round button.
+const arrowClass = 'bg-white/90 text-neutral-800 shadow-sm hover:bg-white active:bg-white disabled:bg-white/90 aria-disabled:bg-white/90 focus-visible:ring-neutral-900'
 </script>
 
 <template>
@@ -43,7 +73,10 @@ const arrowClass = 'bg-white/90 text-neutral-800 shadow-sm hover:bg-white'
     <slot />
 
     <template #content>
-      <div data-testid="photo-viewer">
+      <div
+        data-testid="photo-viewer"
+        @keydown="onKeydown"
+      >
         <!-- The carousel comes first in the DOM, so its focusable root is where focus lands when the viewer opens and the arrow keys work at once. -->
         <div class="relative">
           <UCarousel
@@ -62,22 +95,36 @@ const arrowClass = 'bg-white/90 text-neutral-800 shadow-sm hover:bg-white'
             }"
             @select="current = $event"
           >
-            <!-- A blurred, darkened copy of the photo fills the frame behind it, so photos of any shape leave no grey bars. -->
-            <div class="relative h-53 overflow-hidden rounded-lg bg-black md:h-87.5">
-              <img
-                :src="item.url"
-                alt=""
-                aria-hidden="true"
-                loading="lazy"
-                class="absolute inset-0 size-full scale-125 object-cover blur-xl brightness-50 saturate-150"
+            <!-- No taller than the window leaves room for (a phone on its side is short but wide), or the strip and the counter are cut off. -->
+            <div class="relative h-[min(13.25rem,calc(100dvh_-_10rem))] overflow-hidden rounded-lg bg-black md:h-[min(21.875rem,calc(100dvh_-_12rem))]">
+              <div
+                v-if="isMissing(item)"
+                class="flex size-full items-center justify-center bg-primary/10"
+                :data-testid="`photo-viewer-missing-${index}`"
               >
-              <img
-                :src="item.url"
-                :alt="`${place.name}, photo ${index + 1} of ${images.length}`"
-                loading="lazy"
-                class="relative size-full object-contain"
-                :data-testid="`photo-viewer-photo-${index}`"
-              >
+                <UIcon
+                  name="i-lucide-map-pin"
+                  class="size-12 text-primary"
+                />
+              </div>
+              <template v-else>
+                <!-- A blurred, darkened copy of the photo fills the frame behind it, so photos of any shape leave no grey bars. -->
+                <img
+                  :src="item.url"
+                  alt=""
+                  aria-hidden="true"
+                  loading="lazy"
+                  class="absolute inset-0 size-full scale-125 object-cover blur-xl brightness-50 saturate-150"
+                >
+                <img
+                  :src="item.url"
+                  :alt="`${place.name}, photo ${index + 1} of ${images.length}`"
+                  loading="lazy"
+                  class="relative size-full object-contain"
+                  :data-testid="`photo-viewer-photo-${index}`"
+                  @error="markMissing(item)"
+                >
+              </template>
             </div>
           </UCarousel>
           <UButton
@@ -114,11 +161,23 @@ const arrowClass = 'bg-white/90 text-neutral-800 shadow-sm hover:bg-white'
             :data-testid="`photo-viewer-thumb-${index}`"
             @click="showPhoto(index)"
           >
+            <div
+              v-if="isMissing(image)"
+              class="flex size-full items-center justify-center rounded-lg bg-primary/10"
+              :data-testid="`photo-viewer-thumb-missing-${index}`"
+            >
+              <UIcon
+                name="i-lucide-map-pin"
+                class="size-4 text-primary"
+              />
+            </div>
             <img
+              v-else
               :src="image.url"
               alt=""
               loading="lazy"
               class="size-full rounded-lg object-cover"
+              @error="markMissing(image)"
             >
           </button>
         </div>
